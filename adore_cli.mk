@@ -42,12 +42,11 @@ TEST_SCENARIOS?=adore_scenarios/baseline_test.launch
 
 include ${MAKE_GADGETS_PATH}/make_gadgets.mk
 include ${MAKE_GADGETS_PATH}/docker/docker-tools.mk
-include ${ADORE_CLI_SUBMODULES_PATH}/apt_cacher_ng_docker/apt_cacher_ng_docker.mk
 
 REPO_DIRECTORY:=${ADORE_CLI_MAKEFILE_PATH}
 #CATKIN_WORKSPACE_DIRECTORY:=${REPO_DIRECTORY}/catkin_workspace
 
-ADORE_CLI_SUBMODULES:=make_gadgets apt_cacher_ng_docker 
+ADORE_CLI_SUBMODULES:=make_gadgets
 #include ${MAKE_GADGETS_PATH}/submodule_utils.mk
 #$(call include_submodules,${ADORE_CLI_SUBMODULES_PATH}, ${ADORE_CLI_SUBMODULES})
 
@@ -95,7 +94,6 @@ build_fast_adore_cli_core: # build the adore_cli core context if it does not alr
 
 .PHONY: build_adore_cli_core
 build_adore_cli_core: clean_adore_cli ## Builds the ADORe CLI core docker context/image
-	cd "${ADORE_CLI_MAKEFILE_PATH}" && make start_apt_cacher_ng 
 	cd "${ADORE_CLI_MAKEFILE_PATH}" && make build 
 
 .PHONY: clean_adore_cli 

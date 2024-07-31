@@ -19,7 +19,6 @@ set_env:
 
 .PHONY: build
 build: 
-	cd ${ADORE_CLI_SUBMODULES_PATH}/apt_cacher_ng_docker && make up
 	mkdir -p ${ADORE_CLI_PROJECT}/build
 	cd "${ADORE_CLI_MAKEFILE_PATH}" && \
     docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT} \
