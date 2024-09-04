@@ -21,4 +21,6 @@ git
 curl
 wget
 
+## Required for compiling on arm64
+libhdf5-dev
 # debugging dependencies
