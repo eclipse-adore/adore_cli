@@ -35,6 +35,7 @@ DOCKER_COMPOSE_FILE?=${ADORE_CLI_MAKEFILE_PATH}/docker-compose.yaml
 
 UID := $(shell id -u)
 GID := $(shell id -g)
+ADORE_TAG ?= $(ADORE_CLI_TAG)
 
 
 TEST_SCENARIOS?=adore_scenarios/baseline_test.launch
@@ -135,7 +136,7 @@ adore_cli_start_headless: adore_cli_setup
 .PHONY: adore_cli_attach
 adore_cli_attach:
 	@echo "Running adore_cli attach..."
-	docker exec -it ${ADORE_CLI_PROJECT}_${ADORE_CLI_TAG} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true
+	docker exec -it ${ADORE_CLI_PROJECT}_${ADORE_TAG} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true
 
 .PHONY: branch_adore_cli
 branch_adore_cli: ## Returns the current docker safe/sanitized branch for adore_cli 

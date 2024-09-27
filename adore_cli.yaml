@@ -2,7 +2,7 @@ services:
   adore_cli_core:
     privileged: true
     image: ${ADORE_CLI_PROJECT}:${ADORE_CLI_TAG:-latest}
-    container_name: ${ADORE_CLI_PROJECT}_base_${ADORE_CLI_TAG}
+    container_name: ${ADORE_CLI_PROJECT}_base_${ADORE_TAG}
     user: ${USER}
     hostname: ${HOSTNAME:-ADORe-CLI}
     network_mode: "host"
@@ -39,7 +39,7 @@ services:
     ipc: "host"
     pid: "host"
     image: ${ADORE_CLI_PROJECT_X11_DISPLAY}:${ADORE_CLI_TAG:-latest}
-    container_name: ${ADORE_CLI_PROJECT}_${ADORE_CLI_TAG}
+    container_name: ${ADORE_CLI_PROJECT}_${ADORE_TAG}
     user: ${USER} 
     hostname: ${HOSTNAME:-ADORe-CLI}
     network_mode: "host"
