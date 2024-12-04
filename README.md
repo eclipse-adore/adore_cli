@@ -1,6 +1,5 @@
-# adore_cli
-The adore_cli project provides a runtime docker context for adore. It provides 
-
+# ADORe CLI
+The adore_cli project provides a runtime docker context for ADORe.
 
 ## Getting started
 Docker and make must be installed to use this project
@@ -10,4 +9,5 @@ Docker and make must be installed to use this project
 ```bash
 make cli
 ```
+
 

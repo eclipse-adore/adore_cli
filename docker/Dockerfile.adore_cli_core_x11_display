@@ -1,12 +1,12 @@
-ARG ADORE_CLI_TAG=latest
+ARG ADORE_CLI_CORE_IMAGE=adore_cli_core:latest
 
 ARG REQUIREMENTS_FILE
 ARG USER
 
-FROM adore_cli_core:${ADORE_CLI_TAG} as adore_cli
+FROM ${ADORE_CLI_CORE_IMAGE} AS adore_cli
 
 ARG USER
-ARG REQUIREMENTS_FILE="requirements.adore_cli_x11_display.ubuntu22.04.system"
+ARG REQUIREMENTS_FILE="requirements.adore_cli_core_x11_display.ubuntu.system"
 
 USER root
 COPY docker/files/${REQUIREMENTS_FILE} /tmp
@@ -15,6 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     --mount=target=/var/cache/apt,type=cache,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
+    rm /var/lib/dpkg/info/libc-bin.* || true && \
     apt-get update && \
     apt-get install --no-install-recommends -y $(sed '/^#/d' ${REQUIREMENTS_FILE} | sed '/^$/d')
 

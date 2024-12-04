@@ -4,8 +4,10 @@
 catkin_workspace/
 .config
 adore_cli
+adore_cli/
 .ccache
 **.jpg
 .ccache
 adore_cli_core
 build
+**/.tmp

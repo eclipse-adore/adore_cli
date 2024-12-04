@@ -6,3 +6,4 @@ catkin_workspace/
 adore_cli
 .ccache
 adore_cli_core
+**/.tmp

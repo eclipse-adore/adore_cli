@@ -4,14 +4,16 @@ ARG UID
 ARG GID
 ARG REQUIREMENTS_FILE
 ARG PYTHON_REQUIREMENTS_FILE
+ARG ROS_DISTRO
+ARG OS_CODE_NAME
 
-FROM ros:iron-ros-core-jammy AS adore_cli
+FROM ros:${ROS_DISTRO}-ros-core-${OS_CODE_NAME} AS adore_cli
 
 ARG USER
 ARG UID
 ARG GID
-ARG REQUIREMENTS_FILE="requirements.adore_cli.ubuntu22.04.system"
-ARG PYTHON_REQUIREMENTS_FILE="requirements.adore_cli.pip3"
+ARG REQUIREMENTS_FILE="requirements.adore_cli_core.ubuntu.system"
+ARG PYTHON_REQUIREMENTS_FILE="requirements.adore_cli_core.pip3"
 
 COPY docker/files/${REQUIREMENTS_FILE} /tmp
 WORKDIR /tmp
@@ -19,17 +21,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     --mount=target=/var/cache/apt,type=cache,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
+    rm /var/lib/dpkg/info/libc-bin.* || true && \
     apt-get update && \
     apt-get install --no-install-recommends -y $(sed '/^#/d' ${REQUIREMENTS_FILE} | sed '/^$/d')
 
 COPY docker/files/${PYTHON_REQUIREMENTS_FILE} /tmp
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python3 -m pip install -r ${PYTHON_REQUIREMENTS_FILE}
+    python3 -m pip install --break-system-packages -r ${PYTHON_REQUIREMENTS_FILE}
 
+
+RUN userdel --remove ubuntu
+RUN rm -rf /home/ubuntu
 RUN useradd --create-home ${USER}
-
-
-RUN usermod -u ${UID} ${USER} && groupmod -g ${GID} ${USER}
+RUN cat /etc/passwd && usermod -u ${UID} ${USER} && groupmod -g ${GID} ${USER}
 RUN chown -R ${UID}:${GID} $$HOME | true
 
 ARG ZSH_CUSTOM=/home/${USER}/.oh-my-zsh/custom

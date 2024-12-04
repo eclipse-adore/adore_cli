@@ -1,4 +1,4 @@
 # This file contains the core python3 requirements/dependencies for the adore 
 # cli docker context with one requirement/dependency per line.  
-# They will be installed in the docker image produced by 'Dockerfile.adore_cli'
-setuptools==58.2.0 
+# They will be installed in the docker image produced by 'Dockerfile.adore_cli_core'
+setuptools 

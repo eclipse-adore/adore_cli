@@ -1,25 +1,26 @@
 # This file contains the core APT system requirements for the adore cli docker 
 # context with one requirement/dependency per line.  They will be installed 
-# in the docker image produced by 'Dockerfile.adore_cli'
+# in the docker image produced by 'Dockerfile.adore_cli_core'
 
 rsyslog
 ccache
 sudo
 apt-file
-python3-rospy
+#python3-rospy
+python3-venv
 python3-colcon-common-extensions
 cmake
 ros-dev-tools
 vim
-ros-iron-ros-base
 python3-pip
-ros-iron-foxglove-bridge
 file
-xterm
 zsh
 git 
 curl
 wget
+less
+gettext
+
 
 ## Required for compiling on arm64
 libhdf5-dev

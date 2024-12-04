@@ -28,30 +28,16 @@ if [[ -z ${ADORE_CLI_WORKING_DIRECTORY+x} ]]; then
     exit 1
 fi
 
-
-
 clear
 
 
-bash "${SCRIPT_DIRECTORY}/git_repo_status.sh"
+#bash "${SCRIPT_DIRECTORY}/adore_cli_help.sh"
 cd "${ADORE_CLI_WORKING_DIRECTORY}"
-bash "${SCRIPT_DIRECTORY}/requirements_file_change_status.sh"
-bash "${SCRIPT_DIRECTORY}/adore_cli_motd.sh"
+bash "/tmp/adore_cli/tools/adore_cli_motd.sh"
+printf "\n"
+bash "/tmp/adore_cli/tools/git_repo_status.sh"
+bash "/tmp/adore_cli/tools/requirements_file_change_status.sh"
 
 printf "\n"
-
-#echo " SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
-#echo " ADORE_CLI_WORKING_DIRECTORY: ${ADORE_CLI_WORKING_DIRECTORY}"
-
-
-
-echo "  Vehicle: "
-if [ -z ${VEHICLE_NAME+x} ]; then 
-    printf "  No vehicle set.\n\n"; 
-else 
-    printf "  Vehicle environment set to: ${VEHICLE_NAME}\n\n"; 
-fi
-
 zsh
 
-##source /opt/ros/iron/setup.zsh

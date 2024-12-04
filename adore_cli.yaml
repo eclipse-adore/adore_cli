@@ -1,8 +1,8 @@
 services: 
   adore_cli_core:
     privileged: true
-    image: ${ADORE_CLI_PROJECT}:${ADORE_CLI_TAG:-latest}
-    container_name: ${ADORE_CLI_PROJECT}_base_${ADORE_TAG}
+    image: ${ADORE_CLI_CORE_IMAGE}
+    container_name: ${ADORE_CLI_CONTAINER_NAME}
     user: ${USER}
     hostname: ${HOSTNAME:-ADORe-CLI}
     network_mode: "host"
@@ -17,13 +17,14 @@ services:
     build:
       context: ${ADORE_CLI_MAKEFILE_PATH}
       network: host
-      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli
+      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core
       args:
         - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-        - ADORE_CLI_TAG=${ADORE_CLI_TAG:-latest}
         - USER=${USER}
         - UID=${UID:-1000}
         - GID=${GID:-1001}
+        - ROS_DISTRO=${ROS_DISTRO:-jazzy}
+        - OS_CODE_NAME=${OS_CODE_NAME:-noble}
     volumes:
       - ./:/tmp/adore
       - /var/run/docker.sock:/var/run/docker.sock
@@ -38,8 +39,8 @@ services:
     privileged: true
     ipc: "host"
     pid: "host"
-    image: ${ADORE_CLI_PROJECT_X11_DISPLAY}:${ADORE_CLI_TAG:-latest}
-    container_name: ${ADORE_CLI_PROJECT}_${ADORE_TAG}
+    image: ${ADORE_CLI_CORE_X11_DISPLAY_IMAGE}
+    container_name: ${ADORE_CLI_CONTAINER_NAME}
     user: ${USER} 
     hostname: ${HOSTNAME:-ADORe-CLI}
     network_mode: "host"
@@ -59,16 +60,12 @@ services:
       - "BAG_OUTPUT_DIRECTORY=${SOURCE_DIRECTORY}/.log/.ros/bag_files"
       - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
       - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
-      - "ROS_MASTER_URI=http://127.0.0.1:11311"
-      - "ROS_HOSTNAME=127.0.0.1"
     build:
       context: ${ADORE_CLI_MAKEFILE_PATH}
       network: host
-      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_x11_display
+      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core_x11_display
       args:
         - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-        - ADORE_CLI_TAG=${ADORE_CLI_TAG:-latest}
-        - ADORE_IF_ROS_TAG=${ADORE_IF_ROS_TAG:-latest}
         - USER=${USER}
         - UID=${UID:-1000}
         - GID=${GID:-1001}
@@ -77,6 +74,55 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history:/home/${USER}/.zsh_history
       - ./:/tmp/adore_cli
+      - ${SOURCE_DIRECTORY}:/tmp/adore
+      - ${SOURCE_DIRECTORY}:${SOURCE_DIRECTORY}
+      - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache
+      - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
+    extra_hosts:
+      - "${HOSTNAME:-ADORe-CLI}:127.0.0.1"
+
+  adore_cli:
+    privileged: true
+    ipc: "host"
+    pid: "host"
+    image: ${ADORE_CLI_IMAGE}
+    container_name: ${ADORE_CLI_CONTAINER_NAME}
+    user: ${USER} 
+    hostname: ${HOSTNAME:-ADORe-CLI}
+    network_mode: "host"
+    environment:
+      - ROS_DISTRO=${ROS_DISTRO:-jazzy}
+      - HOSTNAME=${HOSTNAME:-ADORe-CLI}
+      - ADORE_SOURCE_DIRECTORY=${SOURCE_DIRECTORY}
+      - SOURCE_DIRECTORY=${SOURCE_DIRECTORY}
+      - ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY}
+      - DISPLAY_MODE=${DISPLAY_MODE:-native}
+      # - DISPLAY_MODE=${DISPLAY_MODE:-window_manager}
+      # - DISPLAY_MODE=${DISPLAY_MODE:-headless}
+      - DISPLAY=${DISPLAY}
+      - USER=${USER}
+      - UID=${UID}
+      - GID=${GID}
+      - TEST_SCENARIOS=${TEST_SCENARIOS:-baseline_test.launch}
+      - "BAG_OUTPUT_DIRECTORY=${SOURCE_DIRECTORY}/.log/.ros/bag_files"
+      - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
+      - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
+      - ADORE_CLI_IMAGE=${ADORE_CLI_IMAGE}
+      - ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME}
+    build:
+      context: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli
+      network: host
+      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile
+      args:
+        - HOSTNAME=${HOSTNAME:-ADORe-CLI}
+        - USER=${USER}
+        - UID=${UID:-1000}
+        - GID=${GID:-1001}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history:/home/${USER}/.zsh_history
+      - ${ADORE_CLI_MAKEFILE_PATH}:/tmp/adore_cli
       - ${SOURCE_DIRECTORY}:/tmp/adore
       - ${SOURCE_DIRECTORY}:${SOURCE_DIRECTORY}
       - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache

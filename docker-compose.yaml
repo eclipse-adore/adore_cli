@@ -1,12 +1,17 @@
 services:
   adore_cli_core:
     extends:
-      file: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli.yaml
+      file: adore_cli.yaml
       service: adore_cli_core
     profiles:
       - donotstart
-
   adore_cli_core_x11_display:
     extends:
-      file: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli.yaml
+      file: adore_cli.yaml
       service: adore_cli_core_x11_display
+    profiles:
+      - donotstart
+  adore_cli:
+    extends:
+      file: adore_cli.yaml
+      service: adore_cli
