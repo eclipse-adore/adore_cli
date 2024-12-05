@@ -48,7 +48,7 @@ debug_run_root:
 
 .PHONY: clean
 clean:
-	rm -rf ${ADORE_CLI_PROJECT}/build
+	rm -rf build
 	docker rmi $$(docker images -q ${ADORE_CLI_CORE_IMAGE}) --force 2> /dev/null || true
 	docker rmi $$(docker images -q ${ADORE_CLI_CORE_X11_DISPLAY_IMAGE}) --force 2> /dev/null || true
 	docker rmi $$(docker images --filter "dangling=true" -q) --force > /dev/null 2>&1 || true

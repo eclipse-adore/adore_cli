@@ -49,7 +49,6 @@ jobs:
       - name: Build
         run: |
           df -h
-          (cd apt_cacher_ng_docker && make up )
           make build
           make save_docker_images
       - name: CI Test
