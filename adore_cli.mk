@@ -8,11 +8,7 @@ SHELL:=/bin/bash
 ADORE_CLI_PROJECT:=adore_cli_core
 ADORE_CLI_MAKEFILE_PATH:=$(shell realpath "$(shell dirname "$(lastword $(MAKEFILE_LIST))")")
 
-ifeq ($(SUBMODULES_PATH),)
-    ADORE_CLI_SUBMODULES_PATH:=${ADORE_CLI_MAKEFILE_PATH}
-else
-    ADORE_CLI_SUBMODULES_PATH:=$(shell realpath ${SUBMODULES_PATH})
-endif
+ADORE_CLI_SUBMODULES_PATH:=${ADORE_CLI_MAKEFILE_PATH}
 
 MAKE_GADGETS_PATH:=${ADORE_CLI_SUBMODULES_PATH}/make_gadgets
 ifeq ($(wildcard $(MAKE_GADGETS_PATH)/*),)
@@ -56,19 +52,15 @@ $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.bash_history")
 $(shell mkdir -p "${SOURCE_DIRECTORY}/.log")
 
 .PHONY: start
-start: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardown ## OFFLINE start of adore cli 
+start: adore_cli_setup adore_cli_start ## Start the ADORe CLI docker compose context 
+
+.PHONY: stop
+stop: stop_adore_cli ## Stop ADORe CLI docker compose context if it is running
 
 .PHONY: run
 run: adore_cli_setup adore_cli_start adore_cli_run adore_cli_teardown ## Execute a command in the ADORe CLI context `make run cmd="<command to execute>"` 
-
-.PHONY: stop
-stop: stop_adore_cli 
-
 .PHONY: adore_cli_up
 adore_cli_up: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardown 
-
-.PHONY: cli
-cli: adore_cli ## Same as 'make adore_cli' for the lazy 
 
 .PHONY: stop_adore_cli
 stop_adore_cli: docker_host_context_check adore_cli_teardown ## Stop adore_cli docker context if it is running
@@ -76,8 +68,8 @@ stop_adore_cli: docker_host_context_check adore_cli_teardown ## Stop adore_cli d
 .PHONY: stop_adore_cli
 stop_adore_cli: docker_host_context_check adore_cli_teardown
 
-.PHONY: adore_cli 
-adore_cli: docker_host_context_check ## Start adore_cli context or attach to it if already running
+.PHONY: cli 
+cli: docker_host_context_check ## Start ADORe CLI docker context or attach to it if it is already running
 	@if [[ "$$(docker inspect -f '{{.State.Running}}' '${ADORE_CLI_CONTAINER_NAME}' 2>/dev/null)" == "true"  ]]; then\
         cd "${ADORE_CLI_MAKEFILE_PATH}" && make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_attach;\
         exit 0;\
