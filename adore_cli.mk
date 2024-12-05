@@ -135,7 +135,7 @@ adore_cli_run:
         make adore_cli_start; \
     fi
 	@echo "Executing command in container ${ADORE_CLI_CONTAINER_NAME}: $(cmd)"
-	docker exec --workdir /tmp/adore -it ${ADORE_CLI_CONTAINER_NAME} bash -c "source setup.sh && $(cmd)"
+	docker exec --workdir /tmp/adore -it ${ADORE_CLI_CONTAINER_NAME} zsh -c "source ~/.zshrc && $(cmd)"
 
 
 .PHONY: adore_cli_start_headless

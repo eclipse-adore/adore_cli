@@ -39,5 +39,5 @@ bash "/tmp/adore_cli/tools/git_repo_status.sh"
 bash "/tmp/adore_cli/tools/requirements_file_change_status.sh"
 
 printf "\n"
-zsh
 
+zsh

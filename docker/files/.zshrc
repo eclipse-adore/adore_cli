@@ -30,5 +30,6 @@ PROMPT='%B%F{grey}%F{cyan}ADORe CLI:%F %{$fg_bold[green]%}%c %{$reset_color%}$(g
 alias help='bash /tmp/adore_cli/tools/adore_cli_help.sh'
 source /opt/ros/${ROS_DISTRO}/setup.zsh
 if [ -f /tmp/adore/setup.sh ]; then
+    export SHELL=zsh
     source /tmp/adore/setup.sh 
 fi
