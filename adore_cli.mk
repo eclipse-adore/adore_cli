@@ -8,13 +8,11 @@ SHELL:=/bin/bash
 ADORE_CLI_PROJECT:=adore_cli_core
 ADORE_CLI_MAKEFILE_PATH:=$(shell realpath "$(shell dirname "$(lastword $(MAKEFILE_LIST))")")
 
-ADORE_CLI_SUBMODULES_PATH:=${ADORE_CLI_MAKEFILE_PATH}
 
-MAKE_GADGETS_PATH:=${ADORE_CLI_SUBMODULES_PATH}/make_gadgets
+MAKE_GADGETS_PATH:=${ADORE_CLI_MAKEFILE_PATH}/make_gadgets
+
 ifeq ($(wildcard $(MAKE_GADGETS_PATH)/*),)
     $(info INFO: To clone submodules use: 'git submodule update --init --recursive')
-    $(info INFO: To specify alternative path for submodules use: SUBMODULES_PATH="<path to submodules>" make build')
-    $(info INFO: Default submodule path is: ${ADORE_CLI_MAKEFILE_PATH}')
     $(error "ERROR: ${MAKE_GADGETS_PATH} does not exist. Did you clone the submodules?")
 endif
 
@@ -44,7 +42,6 @@ include ${MAKE_GADGETS_PATH}/make_gadgets.mk
 include ${MAKE_GADGETS_PATH}/docker/docker-tools.mk
 
 REPO_DIRECTORY:=${ADORE_CLI_MAKEFILE_PATH}
-ADORE_CLI_SUBMODULES:=make_gadgets
 
 $(shell mkdir -p "${ADORE_CLI_MAKEFILE_PATH}/.ccache")
 $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.zsh_history")

@@ -10,7 +10,7 @@ CATKIN_WORKSPACE_DIRECTORY:=${SOURCE_DIRECTORY}/catkin_workspace
 
 
 include ${ROOT_DIR}/adore_cli.mk
-include ${ADORE_CLI_SUBMODULES_PATH}/ci_teststand/ci_teststand.mk
+include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 
 
 .PHONY: _build_adore_cli_core

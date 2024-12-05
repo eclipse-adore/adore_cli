@@ -18,8 +18,8 @@ USER := $(shell whoami)
 UID := $(shell id -u)
 GID := $(shell id -g)
 
-include ${SUBMODULES_PATH}/make_gadgets/make_gadgets.mk
 include ../adore_cli.mk
+include ${ADORE_CLI_MAKEFILE_PATH}/make_gadgets/make_gadgets.mk
 
 #TAG:=$(shell bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh)
 
