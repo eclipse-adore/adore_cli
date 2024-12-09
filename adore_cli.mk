@@ -135,11 +135,7 @@ adore_cli_run:
         make adore_cli_start; \
     fi
 	@echo "Executing command in container ${ADORE_CLI_CONTAINER_NAME}: $(cmd)"
-	@if test -t 1; then \
-        docker exec --workdir /tmp/adore -it ${ADORE_CLI_CONTAINER_NAME} zsh -c "source ~/.zshrc && $(cmd)"; \
-    else \
-        docker exec --workdir /tmp/adore ${ADORE_CLI_CONTAINER_NAME} zsh -c "source ~/.zshrc && $(cmd)"; \
-    fi
+	docker exec --workdir /tmp/adore ${ADORE_CLI_CONTAINER_NAME} zsh -c "source ~/.zshrc && $(cmd)"; \
 
 
 
