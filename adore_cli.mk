@@ -137,7 +137,9 @@ adore_cli_run:
 	@echo "Executing command in container ${ADORE_CLI_CONTAINER_NAME}: $(cmd)"
 	docker exec --workdir /tmp/adore ${ADORE_CLI_CONTAINER_NAME} zsh -c "source ~/.zshrc && $(cmd)"; \
 
-
+.PHONY: test_ros2_installation
+test_ros2_installation:
+	make run cmd="bash ${ADORE_CLI_MAKEFILE_PATH}/tools/test_ros2_installation.sh"
 
 .PHONY: adore_cli_start_headless
 adore_cli_start_headless: adore_cli_setup
