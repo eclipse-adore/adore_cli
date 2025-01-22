@@ -124,7 +124,7 @@ adore_cli_start:
       --detach
 
 .PHONY: adore_cli_run
-adore_cli_run:
+adore_cli_run: ## Execute command in the ADORe CLI context. Usage: make adore_cli_run cmd="<your_command>"
 	@if [ -z "$(cmd)" ]; then \
         echo "Usage: make adore_cli_run cmd='<your_command>'"; \
         exit 1; \
