@@ -28,7 +28,6 @@ _build_adore_cli_core:
 
 .PHONY: build_adore_cli_core_x11_display
 build_adore_cli_core_x11_display: 
-	echo "${ADORE_CLI_CORE_PROJECT_X11_DISPLAY}"
 	docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT_X11_DISPLAY} \
                          --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
                          --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \

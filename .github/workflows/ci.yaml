@@ -78,8 +78,9 @@ jobs:
       - name: Push Docker Images
         run: |
           IMAGES=$(make images_adore_cli)
+          REPO=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           for IMAGE in $IMAGES; do
-            docker push ghcr.io/${{ github.repository_owner }}/$IMAGE:${{ github.sha }}
+            docker push ghcr.io/${REPO}/$IMAGE
           done
 
       - name: Upload Logs
