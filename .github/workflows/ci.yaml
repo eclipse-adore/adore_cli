@@ -1,5 +1,7 @@
-name: CI 
-on: push
+name: CI
+
+on:
+  push:
 
 jobs:
   CI:
@@ -10,6 +12,7 @@ jobs:
         run: |
           df -h
           sudo apt-get update
+
       - name: Maximize free space
         uses: jlumbroso/free-disk-space@main
         with:
@@ -20,6 +23,7 @@ jobs:
           large-packages: true
           docker-images: true
           swap-storage: true
+
       - name: Freespace Check
         run: |
           df -h
@@ -27,38 +31,59 @@ jobs:
           free_space=$(df -h . | awk '{print $4}' | grep "G")
           free_space="${free_space%G}"
           if [ -z "$free_space" ]; then
-              echo "ERROR: free_space variable is empty or not set." >&2
-              exit 1
+            echo "ERROR: free_space variable is empty or not set." >&2
+            exit 1
           fi
           df -h
           echo "Free space (required): ${REQUIRED_FREE_SPACE} GB"
           echo "Free space (available): ${free_space} GB"
           if (( REQUIRED_FREE_SPACE > free_space )); then
-              echo "ERROR: Insufficient free space: ${free_space} GB available, ${REQUIRED_FREE_SPACE} GB required." >&2
-              exit 1
+            echo "ERROR: Insufficient free space: ${free_space} GB available, ${REQUIRED_FREE_SPACE} GB required." >&2
+            exit 1
           fi
+
       - name: Checkout
         uses: actions/checkout@v2
         with:
           submodules: 'recursive'
+
       - name: Install requirements
         run: |
           df -h
           sudo apt-get update
           sudo apt-get install -y make
+
       - name: Build
         run: |
           df -h
           make build
           make save_docker_images
+
       - name: CI Test
         run: |
           df -h
           make ci_test
+
+      - name: Login to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Tag Docker Images
+        run: |
+          IMAGES=$(make images_adore_cli) # Assuming make list_docker_images outputs the image names.
+          for IMAGE in $IMAGES; do
+            docker tag $IMAGE ghcr.io/${{ github.repository_owner }}/$IMAGE:${{ github.sha }}
+          done
+
+      - name: Push Docker Images
+        run: |
+          IMAGES=$(make images_adore_cli)
+          for IMAGE in $IMAGES; do
+            docker push ghcr.io/${{ github.repository_owner }}/$IMAGE:${{ github.sha }}
+          done
+
       - name: Upload Logs
         uses: actions/upload-artifact@v4
         with:
           name: logs
           path: .log
         if: always()
-
