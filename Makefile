@@ -3,6 +3,8 @@ SHELL:=/bin/bash
 ROOT_DIR:=$(shell dirname "$(realpath $(firstword $(MAKEFILE_LIST)))")
 
 .EXPORT_ALL_VARIABLES:
+DOCKER_BUILDKIT?=1
+COMPOSE_BAKE?=true
 #SOURCE_DIRECTORY:=$(shell realpath "${ROOT_DIR}/..")
 SOURCE_DIRECTORY:=${ROOT_DIR}
 ADORE_CLI_WORKING_DIRECTORY:=${ROOT_DIR}
@@ -15,8 +17,8 @@ include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 
 .PHONY: _build_adore_cli_core
 _build_adore_cli_core: 
-	cd "${ADORE_CLI_MAKEFILE_PATH}" && \
-    docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT} \
+	docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT} \
+                         --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
                          --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
                          --build-arg ADORE_CLI_PROJECT_X11_DISPLAY=${ADORE_CLI_CORE_PROJECT_X11_DISPLAY} \
                          --build-arg USER=${USER} \
@@ -26,6 +28,7 @@ _build_adore_cli_core:
 
 .PHONY: build_adore_cli_core_x11_display
 build_adore_cli_core_x11_display: 
+	echo "${ADORE_CLI_CORE_PROJECT_X11_DISPLAY}"
 	docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT_X11_DISPLAY} \
                          --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
                          --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \

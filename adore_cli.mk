@@ -17,7 +17,8 @@ ifeq ($(wildcard $(MAKE_GADGETS_PATH)/*),)
 endif
 
 BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh)
-ADORE_CLI_CORE_TAG:=${BRANCH}
+SHORT_HASH := $(shell git rev-parse --short HEAD)
+ADORE_CLI_CORE_TAG:=${BRANCH}_${SHORT_HASH}
 ADORE_CLI_CORE_IMAGE:=${ADORE_CLI_PROJECT}:${ADORE_CLI_CORE_TAG}
 ADORE_CLI_PROJECT_X11_DISPLAY:=${ADORE_CLI_PROJECT}_x11_display
 ADORE_CLI_CORE_X11_DISPLAY_IMAGE:=${ADORE_CLI_PROJECT_X11_DISPLAY}:${ADORE_CLI_CORE_TAG}
@@ -83,7 +84,8 @@ build_fast_adore_cli: # Build the adore_cli core context if it does not already 
 
 .PHONY: build_adore_cli_core
 build_adore_cli_core: clean_adore_cli ## Builds the ADORe CLI core docker context/image
-	cd "${ADORE_CLI_MAKEFILE_PATH}" && make build 
+	cd "${ADORE_CLI_MAKEFILE_PATH}" && make _build_adore_cli_core 
+	cd "${ADORE_CLI_MAKEFILE_PATH}" && make build_adore_cli_core_x11_display 
 
 .PHONY: build_adore_cli
 build_adore_cli: ## Builds the ADORe CLI runtime docker context/image
