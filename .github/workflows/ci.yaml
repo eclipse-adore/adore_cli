@@ -71,7 +71,7 @@ jobs:
         run: |
           IMAGES=$(make images_adore_cli) # Assuming make list_docker_images outputs the image names.
           for IMAGE in $IMAGES; do
-            docker tag $IMAGE ghcr.io/${{ github.repository_owner }}/$IMAGE:${{ github.sha }}
+            docker tag $IMAGE ghcr.io/${{ github.repository_owner }}/$IMAGE
           done
 
       - name: Push Docker Images
