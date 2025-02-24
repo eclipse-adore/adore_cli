@@ -69,9 +69,10 @@ jobs:
 
       - name: Tag Docker Images
         run: |
-          IMAGES=$(make images_adore_cli) # Assuming make list_docker_images outputs the image names.
+          IMAGES=$(make images_adore_cli)
+          REPO=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           for IMAGE in $IMAGES; do
-            docker tag $IMAGE ghcr.io/${{ github.repository_owner }}/$IMAGE
+            docker tag $IMAGE ghcr.io/${REPO}/$IMAGE
           done
 
       - name: Push Docker Images
