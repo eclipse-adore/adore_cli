@@ -16,14 +16,26 @@ ifeq ($(wildcard $(MAKE_GADGETS_PATH)/*),)
     $(error "ERROR: ${MAKE_GADGETS_PATH} does not exist. Did you clone the submodules?")
 endif
 
-BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh)
-SHORT_HASH := $(shell git rev-parse --short HEAD)
+BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
+SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
+
+PARENT_BRANCH?= $(shell bash $(MAKE_GADGETS_PATH)/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
+PARENT_SHORT_HASH?=$(shell git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
+
+PARENT_TAG:=${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+
 ADORE_CLI_CORE_TAG:=${BRANCH}_${SHORT_HASH}
 ADORE_CLI_CORE_IMAGE:=${ADORE_CLI_PROJECT}:${ADORE_CLI_CORE_TAG}
+
 ADORE_CLI_PROJECT_X11_DISPLAY:=${ADORE_CLI_PROJECT}_x11_display
 ADORE_CLI_CORE_X11_DISPLAY_IMAGE:=${ADORE_CLI_PROJECT_X11_DISPLAY}:${ADORE_CLI_CORE_TAG}
-ADORE_CLI_IMAGE?=${ADORE_CLI_CORE_X11_DISPLAY_IMAGE}
-ADORE_CLI_CONTAINER_NAME?=adore_cli_core_${BRANCH}
+
+ADORE_CLI_TAG:=${ADORE_CLI_CORE_TAG}_${PARENT_TAG}
+ADORE_CLI_IMAGE:=adore_cli:${ADORE_CLI_TAG}
+
+ADORE_CLI_CONTAINER_NAME:=adore_cli_${ADORE_CLI_TAG}
+
+
 
 SOURCE_DIRECTORY?=${REPO_DIRECTORY}
 ADORE_CLI_WORKING_DIRECTORY?=${REPO_DIRECTORY}
