@@ -65,6 +65,7 @@ services:
       network: host
       dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core_x11_display
       args:
+        - ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE}
         - HOSTNAME=${HOSTNAME:-ADORe-CLI}
         - USER=${USER}
         - UID=${UID:-1000}

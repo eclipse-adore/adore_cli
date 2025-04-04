@@ -18,13 +18,26 @@ endif
 
 ARCH := $(shell uname -m)
 
-BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh)
-ADORE_CLI_CORE_TAG:=${BRANCH}_${ARCH}
+BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
+SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
+
+PARENT_BRANCH?= $(shell bash $(MAKE_GADGETS_PATH)/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
+PARENT_SHORT_HASH?=$(shell git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
+
+PARENT_TAG:=${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+
+ADORE_CLI_CORE_TAG:=${BRANCH}_${SHORT_HASH}_${ARCH}
 ADORE_CLI_CORE_IMAGE:=${ADORE_CLI_PROJECT}:${ADORE_CLI_CORE_TAG}
+
 ADORE_CLI_PROJECT_X11_DISPLAY:=${ADORE_CLI_PROJECT}_x11_display
 ADORE_CLI_CORE_X11_DISPLAY_IMAGE:=${ADORE_CLI_PROJECT_X11_DISPLAY}:${ADORE_CLI_CORE_TAG}
-ADORE_CLI_IMAGE?=${ADORE_CLI_CORE_X11_DISPLAY_IMAGE}
-ADORE_CLI_CONTAINER_NAME?=adore_cli_core_${BRANCH}
+
+ADORE_CLI_TAG:=${ADORE_CLI_CORE_TAG}_${PARENT_TAG}
+ADORE_CLI_IMAGE:=adore_cli:${ADORE_CLI_TAG}
+
+ADORE_CLI_CONTAINER_NAME:=adore_cli_${ADORE_CLI_TAG}
+
+
 
 SOURCE_DIRECTORY?=${REPO_DIRECTORY}
 ADORE_CLI_WORKING_DIRECTORY?=${REPO_DIRECTORY}
@@ -85,7 +98,8 @@ build_fast_adore_cli: # Build the adore_cli core context if it does not already 
 
 .PHONY: build_adore_cli_core
 build_adore_cli_core: clean_adore_cli ## Builds the ADORe CLI core docker context/image
-	cd "${ADORE_CLI_MAKEFILE_PATH}" && make build 
+	cd "${ADORE_CLI_MAKEFILE_PATH}" && make _build_adore_cli_core 
+	cd "${ADORE_CLI_MAKEFILE_PATH}" && make build_adore_cli_core_x11_display 
 
 .PHONY: build_adore_cli
 build_adore_cli: ## Builds the ADORe CLI runtime docker context/image
@@ -126,7 +140,7 @@ adore_cli_start:
       --detach
 
 .PHONY: adore_cli_run
-adore_cli_run:
+adore_cli_run: ## Execute command in the ADORe CLI context. Usage: make adore_cli_run cmd="<your_command>"
 	@if [ -z "$(cmd)" ]; then \
         echo "Usage: make adore_cli_run cmd='<your_command>'"; \
         exit 1; \
