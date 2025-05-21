@@ -14,45 +14,45 @@ CATKIN_WORKSPACE_DIRECTORY:=${SOURCE_DIRECTORY}/catkin_workspace
 include ${ROOT_DIR}/adore_cli.mk
 include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 
-
 .PHONY: _build_adore_cli_core
-_build_adore_cli_core: 
-	docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT} \
-                         --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
-                         --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
-                         --build-arg ADORE_CLI_PROJECT_X11_DISPLAY=${ADORE_CLI_CORE_PROJECT_X11_DISPLAY} \
-                         --build-arg USER=${USER} \
-                         --build-arg UID=${UID} \
-                         --build-arg GID=${GID} \
-                         --build-arg DOCKER_GID=${DOCKER_GID}
-
-.PHONY: build_adore_cli_core_x11_display
-build_adore_cli_core_x11_display: 
-	docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT_X11_DISPLAY} \
-                         --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
-                         --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
-                         --build-arg USER=${USER} \
-                         --build-arg UID=${UID} \
-                         --build-arg GID=${GID} \
-                         --build-arg DOCKER_GID=${DOCKER_GID}
-
+_build_adore_cli_core: check_cross_compile_deps
+	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
+        echo "Building $(ARCH) core image with buildx..."; \
+        docker buildx build --platform $(DOCKER_PLATFORM) \
+            -t ${ADORE_CLI_CORE_IMAGE} \
+            --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
+            --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
+            --build-arg USER=${USER} \
+            --build-arg UID=${UID} \
+            --build-arg GID=${GID} \
+            --build-arg DOCKER_GID=${DOCKER_GID} \
+            -f ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core \
+            ${ADORE_CLI_MAKEFILE_PATH} --load; \
+    else \
+        docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT} \
+            --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
+            --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
+            --build-arg USER=${USER} \
+            --build-arg UID=${UID} \
+            --build-arg GID=${GID} \
+            --build-arg DOCKER_GID=${DOCKER_GID}; \
+    fi
 
 .PHONY: build
-build: _build_adore_cli_core build_adore_cli_core_x11_display build_adore_cli
+build: _build_adore_cli_core build_adore_cli
 
 .PHONY: debug_run
 debug_run:
-	docker run -it --rm --entrypoint /bin/bash ${ADORE_CLI_PROJECT}_x11_display:${ADORE_CLI_TAG}
+	docker run -it --rm --entrypoint /bin/bash ${ADORE_CLI_PROJECT}:${ADORE_CLI_TAG}
 
 .PHONY: debug_run_root
 debug_run_root:
-	docker run -it --rm --user root --entrypoint /bin/bash ${ADORE_CLI_PROJECT}_x11_display:${ADORE_CLI_TAG}
+	docker run -it --rm --user root --entrypoint /bin/bash ${ADORE_CLI_PROJECT}:${ADORE_CLI_TAG}
 
 .PHONY: clean
 clean:
 	rm -rf build
 	docker rmi $$(docker images -q ${ADORE_CLI_CORE_IMAGE}) --force 2> /dev/null || true
-	docker rmi $$(docker images -q ${ADORE_CLI_CORE_X11_DISPLAY_IMAGE}) --force 2> /dev/null || true
 	docker rmi $$(docker images --filter "dangling=true" -q) --force > /dev/null 2>&1 || true
 
 .PHONY: test

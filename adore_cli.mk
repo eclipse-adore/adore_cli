@@ -16,27 +16,22 @@ ifeq ($(wildcard $(MAKE_GADGETS_PATH)/*),)
     $(error "ERROR: ${MAKE_GADGETS_PATH} does not exist. Did you clone the submodules?")
 endif
 
-ARCH := $(shell uname -m)
+ARCH ?= $(shell uname -m)
+DOCKER_PLATFORM ?= linux/$(ARCH)
+CROSS_COMPILE ?= $(shell if [ "$(shell uname -m)" != "$(ARCH)" ]; then echo "true"; else echo "false"; fi)
 
 BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
 SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
-
 PARENT_BRANCH?= $(shell bash $(MAKE_GADGETS_PATH)/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
 PARENT_SHORT_HASH?=$(shell git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
-
 PARENT_TAG:=${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+
 
 ADORE_CLI_CORE_TAG:=${BRANCH}_${SHORT_HASH}_${ARCH}
 ADORE_CLI_CORE_IMAGE:=${ADORE_CLI_PROJECT}:${ADORE_CLI_CORE_TAG}
-
-ADORE_CLI_PROJECT_X11_DISPLAY:=${ADORE_CLI_PROJECT}_x11_display
-ADORE_CLI_CORE_X11_DISPLAY_IMAGE:=${ADORE_CLI_PROJECT_X11_DISPLAY}:${ADORE_CLI_CORE_TAG}
-
 ADORE_CLI_TAG:=${ADORE_CLI_CORE_TAG}_${PARENT_TAG}
 ADORE_CLI_IMAGE:=adore_cli:${ADORE_CLI_TAG}
-
 ADORE_CLI_CONTAINER_NAME:=adore_cli_${ADORE_CLI_TAG}
-
 
 
 SOURCE_DIRECTORY?=${REPO_DIRECTORY}
@@ -62,6 +57,21 @@ $(shell mkdir -p "${ADORE_CLI_MAKEFILE_PATH}/.ccache")
 $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.zsh_history")
 $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.bash_history")
 $(shell mkdir -p "${SOURCE_DIRECTORY}/.log")
+
+.PHONY: check_cross_compile_deps
+check_cross_compile_deps:
+	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
+        echo "Cross-compiling for $(ARCH) on $(shell uname -m)"; \
+        if ! which qemu-$(ARCH)-static >/dev/null || ! docker buildx inspect $(ARCH)builder >/dev/null 2>&1; then \
+            echo "Installing cross-compilation dependencies..."; \
+            sudo apt-get update && sudo apt-get install -y qemu qemu-user-static binfmt-support; \
+            docker run --privileged --rm tonistiigi/binfmt --install $(ARCH); \
+            if ! docker buildx inspect $(ARCH)builder >/dev/null 2>&1; then \
+                docker buildx create --name $(ARCH)builder --driver docker-container --use; \
+            fi; \
+        fi; \
+        export DOCKER_BUILDX=1; \
+    fi
 
 .PHONY: start
 start: adore_cli_setup adore_cli_start ## Start the ADORe CLI docker compose context 
@@ -93,13 +103,11 @@ cli: docker_host_context_check ## Start ADORe CLI docker context or attach to it
 .PHONY: build_fast_adore_cli_core
 build_fast_adore_cli: # Build the adore_cli core context if it does not already exist in the docker repository. If it does exist this is a noop.
 	@[ ! -n "$$(docker images -q ${ADORE_CLI_CORE_IMAGE})" ] && cd "${ADORE_CLI_MAKEFILE_PATH}" && make build || true
-	@[ ! -n "$$(docker images -q ${ADORE_CLI_CORE_X11_DISPLAY_IMAGE})" ] && cd "${ADORE_CLI_MAKEFILE_PATH}" && make build || true
 	@[ ! -n "$$(docker images -q ${ADORE_CLI_IMAGE})" ] && cd "${ADORE_CLI_MAKEFILE_PATH}/adore_cli" && make build || true
 
 .PHONY: build_adore_cli_core
 build_adore_cli_core: clean_adore_cli ## Builds the ADORe CLI core docker context/image
 	cd "${ADORE_CLI_MAKEFILE_PATH}" && make _build_adore_cli_core 
-	cd "${ADORE_CLI_MAKEFILE_PATH}" && make build_adore_cli_core_x11_display 
 
 .PHONY: build_adore_cli
 build_adore_cli: ## Builds the ADORe CLI runtime docker context/image
@@ -172,12 +180,11 @@ branch_adore_cli: ## Returns the current docker safe/sanitized branch for adore_
 
 .PHONY: image_adore_cli
 image_adore_cli: ## Returns the current docker image name for adore_cli
-	@echo "${ADORE_CLI_CORE_X11_DISPLAY_IMAGE}"
+	@echo "${ADORE_CLI_CORE_IMAGE}"
 
 .PHONY: images_adore_cli
 images_adore_cli: ## Returns all docker images for adore_cli
 	@echo "${ADORE_CLI_CORE_IMAGE}"
-	@echo "${ADORE_CLI_CORE_X11_DISPLAY_IMAGE}"
 	@echo "${ADORE_CLI_IMAGE}"
 
 .PHONY: container_name_adore_cli
