@@ -22,6 +22,8 @@ _build_adore_cli_core: check_cross_compile_deps
             -t ${ADORE_CLI_CORE_IMAGE} \
             --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
             --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
+            --build-arg ROS_DISTRO=${ROS_DISTRO} \
+            --build-arg OS_CODE_NAME=${OS_CODE_NAME} \
             --build-arg USER=${USER} \
             --build-arg UID=${UID} \
             --build-arg GID=${GID} \
