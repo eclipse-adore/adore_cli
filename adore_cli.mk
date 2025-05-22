@@ -64,7 +64,7 @@ check_cross_compile_deps:
         echo "Cross-compiling for $(ARCH) on $(shell uname -m)"; \
         if ! which qemu-$(ARCH)-static >/dev/null || ! docker buildx inspect $(ARCH)builder >/dev/null 2>&1; then \
             echo "Installing cross-compilation dependencies..."; \
-            sudo apt-get update && sudo apt-get install -y qemu qemu-user-static binfmt-support; \
+            sudo apt-get update && sudo apt-get install -y qemu-user-static binfmt-support; \
             docker run --privileged --rm tonistiigi/binfmt --install $(ARCH); \
             if ! docker buildx inspect $(ARCH)builder >/dev/null 2>&1; then \
                 docker buildx create --name $(ARCH)builder --driver docker-container --use; \
