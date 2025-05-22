@@ -10,6 +10,8 @@ SOURCE_DIRECTORY:=${ROOT_DIR}
 ADORE_CLI_WORKING_DIRECTORY:=${ROOT_DIR}
 CATKIN_WORKSPACE_DIRECTORY:=${SOURCE_DIRECTORY}/catkin_workspace
 
+ROS_DISTRO:=jazzy
+OS_CODE_NAME:=noble
 
 include ${ROOT_DIR}/adore_cli.mk
 include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
@@ -34,6 +36,8 @@ _build_adore_cli_core: check_cross_compile_deps
         docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT} \
             --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
             --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
+            --build-arg ROS_DISTRO=${ROS_DISTRO} \
+            --build-arg OS_CODE_NAME=${OS_CODE_NAME} \
             --build-arg USER=${USER} \
             --build-arg UID=${UID} \
             --build-arg GID=${GID} \

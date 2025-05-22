@@ -33,6 +33,7 @@ build: clean gather
 			--tag ${ADORE_CLI_IMAGE} \
 			--build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
 			--build-arg ROS_DISTRO=${ROS_DISTRO} \
+			--build-arg OS_CODE_NAME=${OS_CODE_NAME} \
 			--build-arg USER=${USER} \
 			--build-arg UID=${UID} \
 			--build-arg GID=${GID} \
@@ -43,6 +44,7 @@ build: clean gather
 			--tag ${ADORE_CLI_IMAGE} \
 			--build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
 			--build-arg ROS_DISTRO=${ROS_DISTRO} \
+			--build-arg OS_CODE_NAME=${OS_CODE_NAME} \
 			--build-arg USER=${USER} \
 			--build-arg UID=${UID} \
 			--build-arg GID=${GID} \
