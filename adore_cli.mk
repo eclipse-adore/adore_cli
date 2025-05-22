@@ -19,6 +19,7 @@ endif
 ARCH ?= $(shell uname -m)
 DOCKER_PLATFORM ?= linux/$(ARCH)
 CROSS_COMPILE ?= $(shell if [ "$(shell uname -m)" != "$(ARCH)" ]; then echo "true"; else echo "false"; fi)
+MINIMUM_DOCKER_VERSION=28
 
 BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
 SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
@@ -58,8 +59,19 @@ $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.zsh_history")
 $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.bash_history")
 $(shell mkdir -p "${SOURCE_DIRECTORY}/.log")
 
+.PHONY: check_docker_version
+check_docker_version:
+	@docker_version=$$(docker version --format '{{.Server.Version}}' 2>/dev/null | cut -d'.' -f1); \
+   if [ -z "$$docker_version" ]; then \
+       echo "Error: Docker is not running or not installed"; \
+       exit 1; \
+   elif [ "$$docker_version" -lt ${MINIMUM_DOCKER_VERSION} ]; then \
+        echo "Error: Docker version ${MINIMUM_DOCKER_VERSION}+ required, found version $$docker_version"; \
+        exit 1; \
+   fi
+
 .PHONY: check_cross_compile_deps
-check_cross_compile_deps:
+check_cross_compile_deps: check_docker_version
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
         echo "Cross-compiling for $(ARCH) on $(shell uname -m)"; \
         if ! which qemu-$(ARCH)-static >/dev/null || ! docker buildx inspect $(ARCH)builder >/dev/null 2>&1; then \
