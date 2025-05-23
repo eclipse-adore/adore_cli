@@ -57,7 +57,6 @@ jobs:
         run: |
           df -h
           make build
-          ARCH=arm64 make build
           make save_docker_images
 
       - name: CI Test
