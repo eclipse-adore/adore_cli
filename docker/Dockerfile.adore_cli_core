@@ -7,13 +7,32 @@ ARG PYTHON_REQUIREMENTS_FILE
 ARG ROS_DISTRO
 ARG OS_CODE_NAME
 
-FROM ros:${ROS_DISTRO}-ros-core-${OS_CODE_NAME} AS adore_cli_core
+FROM ubuntu:noble AS adore_cli_core
 
 ARG USER
 ARG UID
 ARG GID
 ARG REQUIREMENTS_FILE="requirements.adore_cli_core.ubuntu.system"
 ARG PYTHON_REQUIREMENTS_FILE="requirements.adore_cli_core.pip3"
+ENV ROS_APT_VERSION=v1.1.0
+
+
+RUN apt-get update \
+  && apt-get install -y ca-certificates curl file
+
+RUN bash -c '\
+    set -ex; \
+    ROS_APT_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F\" '\''{print $4}'\''); \
+    CODENAME=$(. /etc/os-release && echo $VERSION_CODENAME); \
+    echo "ROS_APT_VERSION=$ROS_APT_VERSION, CODENAME=$CODENAME"; \
+    URL="https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_VERSION}/ros2-apt-source_${ROS_APT_VERSION}.${CODENAME}_all.deb"; \
+    echo "URL=$URL"; \
+    curl -L -s -o /tmp/ros-apt-source.deb "$URL"; \
+    file /tmp/ros-apt-source.deb; \
+    apt-get update; \
+    apt-get install -y /tmp/ros-apt-source.deb; \
+    rm -f /tmp/ros-apt-source.deb'
+
 
 COPY docker/files/${REQUIREMENTS_FILE} /tmp
 WORKDIR /tmp

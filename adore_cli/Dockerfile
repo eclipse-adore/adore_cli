@@ -15,7 +15,6 @@ ARG ROS_DISTRO
 ENV ROS_DISTRO=${ROS_DISTRO}
 
 
-
 COPY .tmp/requirements /tmp/.tmp/requirements
 COPY .tmp/requirements/. /tmp/
 WORKDIR /tmp/.tmp/requirements
