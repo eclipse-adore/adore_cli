@@ -20,7 +20,20 @@ COPY .tmp/requirements /tmp/.tmp/requirements
 COPY .tmp/requirements/. /tmp/
 WORKDIR /tmp/.tmp/requirements
 
+ENV DEBIAN_FRONTEND=noninteractive
 USER root
+RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    apt-get update && apt-get install -y software-properties-common && \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && \
+    find . -maxdepth 1 -type f -name '*.ppa' -exec cat {} + 2>/dev/null | \
+    sed '/^#/d' | \
+    sed '/^$/d' | \
+    envsubst | \
+    xargs -r -I {} add-apt-repository -y {}
+
+
 RUN --mount=type=cache,target=/root/.cache/pip \
     find . -maxdepth 1 -type f -name '*.pip3' -exec cat {} + 2>/dev/null | \
     xargs -r python3 -m pip install --break-system-packages
