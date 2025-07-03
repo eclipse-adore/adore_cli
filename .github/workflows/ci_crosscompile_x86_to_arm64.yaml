@@ -1,12 +1,14 @@
 ---
-name: CI_native_x86
+name: CI_crosscompile_x86_to_arm64
 
 on:
-  push:
+  workflow_dispatch:
 
 jobs:
-  CI_native_x86:
+  CI:
     runs-on: ubuntu-latest
+    env:
+      ARCH: arm64
 
     steps:
       - name: Init

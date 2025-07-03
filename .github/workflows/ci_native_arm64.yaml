@@ -1,10 +1,11 @@
-name: CI
+---
+name: CI_native_arm64
 
 on:
   push:
 
 jobs:
-  CI:
+  CI_native_arm64:
     runs-on: ubuntu-24.04-arm
 
     steps:
