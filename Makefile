@@ -20,7 +20,9 @@ include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 _build_adore_cli_core: check_cross_compile_deps
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
         echo "Building $(ARCH) core image with buildx..."; \
-        docker buildx build --platform $(DOCKER_PLATFORM) \
+        docker buildx build \
+            --builder=default \
+            --platform=$(DOCKER_PLATFORM) \
             -t ${ADORE_CLI_CORE_IMAGE} \
             --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
             --build-arg ADORE_CLI_PROJECT=${ADORE_CLI_PROJECT} \
@@ -31,7 +33,8 @@ _build_adore_cli_core: check_cross_compile_deps
             --build-arg GID=${GID} \
             --build-arg DOCKER_GID=${DOCKER_GID} \
             -f ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core \
-            ${ADORE_CLI_MAKEFILE_PATH} --load; \
+            ${ADORE_CLI_MAKEFILE_PATH} \
+            --load; \
     else \
         docker compose -f ${DOCKER_COMPOSE_FILE} build ${ADORE_CLI_PROJECT} \
             --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
@@ -43,6 +46,7 @@ _build_adore_cli_core: check_cross_compile_deps
             --build-arg GID=${GID} \
             --build-arg DOCKER_GID=${DOCKER_GID}; \
     fi
+
 
 .PHONY: build
 build: _build_adore_cli_core build_adore_cli

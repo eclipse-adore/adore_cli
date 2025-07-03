@@ -29,7 +29,9 @@ include ${ADORE_CLI_MAKEFILE_PATH}/make_gadgets/make_gadgets.mk
 build: clean gather
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
 		echo "Cross-compiling for $(ARCH)..."; \
-		docker buildx build --platform $(DOCKER_PLATFORM) \
+		docker buildx build \
+			--builder=default \
+			--platform $(DOCKER_PLATFORM) \
 			--tag ${ADORE_CLI_IMAGE} \
 			--build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
 			--build-arg ROS_DISTRO=${ROS_DISTRO} \
@@ -51,6 +53,7 @@ build: clean gather
 			--build-arg DOCKER_GID=${DOCKER_GID} \
 			--build-arg USER=${USER} . ; \
 	fi
+
 
 .PHONY: gather
 gather:
