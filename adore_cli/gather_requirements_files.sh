@@ -19,22 +19,40 @@ gather_requirements_files() {
     mkdir -p "$requirements_temp_dir/"
 
     # Gather *.system files (APT packages)
-    find "$base_directory" -type f -name "*.system" ! -path "*/ros_translator/*" | while read -r file; do
-        sed '/^#/d' "$file" | cut -d "#" -f1 | sed 's/[ \t]*$//' | sed '/^$/d'
+    mapfile -d '' files < <(find "$base_directory" -type f -name "*.system" ! -path "*/ros_translator/*" -print0)
+    if (( ${#files[@]} )); then
+        printf '%s\0' "${files[@]}" | xargs -0 -I{} bash -c '
+        sed "/^#/d" "{}" | cut -d "#" -f1 | sed "s/[ \t]*$//" | sed "/^$/d"
         echo ""
-    done | sort -u | grep -v ".system" > "$requirements_temp_dir/combined_requirements.system"
-
+        ' | sort -u | grep -v ".system" > "$requirements_temp_dir/combined_requirements.system"
+    else
+        echo "No *.system files found, skipping."
+    fi
+    
     # Gather *.pip3 files (Python packages)
-    find "$base_directory" -type f -name "*.pip3" | while read -r file; do
-        sed '/^#/d' "$file" | cut -d "#" -f1 | sed 's/[ \t]*$//' | sed '/^$/d'
+    mapfile -d '' files < <(find "$base_directory" -type f -name "*.pip3" -print0)
+    if (( ${#files[@]} )); then
+        printf '%s\0' "${files[@]}" | xargs -0 -I{} bash -c '
+        sed "/^#/d" "{}" | cut -d "#" -f1 | sed "s/[ \t]*$//" | sed "/^$/d"
         echo ""
-    done | sort -u > "$requirements_temp_dir/combined_requirements.pip3"
+        ' | sort -u > "$requirements_temp_dir/combined_requirements.pip3"
+    else
+        echo "No *.pip3 files found, skipping."
+    fi
+    
+    # Gather requirements.ppa files (PPAs)
+    mapfile -d '' files < <(find "$base_directory" -type f -name "requirements.ppa" -print0)
+    if (( ${#files[@]} )); then
+        printf '%s\0' "${files[@]}" | xargs -0 -I{} bash -c '
+        sed "/^#/d" "{}" | cut -d "#" -f1 | sed "s/[ \t]*$//" | sed "/^$/d"
+        echo ""
+        ' | sort -u | grep '^ppa:' > "$requirements_temp_dir/combined_requirements.ppa"
+    else
+        echo "No requirements.ppa files found, skipping."
+    fi
 
-    # New: Gather requirements.ppa files (PPAs)
-    find "$base_directory" -type f -name "requirements.ppa" | while read -r file; do
-        sed '/^#/d' "$file" | cut -d "#" -f1 | sed 's/[ \t]*$//' | sed '/^$/d'
-        echo ""
-    done | sort -u | grep '^ppa:' > "$requirements_temp_dir/combined_requirements.ppa"
+
+
 }
 
 # Example usage:
