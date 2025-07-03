@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  CI:
+  CI_crosscompile_x86_to_arm64:
     runs-on: ubuntu-latest
     env:
       ARCH: arm64
