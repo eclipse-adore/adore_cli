@@ -24,4 +24,5 @@ gettext
 
 ## Required for compiling on arm64
 libhdf5-dev
-# debugging dependencies
+
+software-properties-common
