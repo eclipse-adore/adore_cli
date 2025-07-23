@@ -13,6 +13,7 @@ services:
       - HOSTNAME=${HOSTNAME:-ADORe-CLI}
       - TEST_SCENARIOS=${TEST_SCENARIOS:-baseline_test.launch}
       - "BAG_OUTPUT_DIRECTORY=${SOURCE_DIRECTORY}/.log/.ros/bag_files"
+      - "LOG_DIRECTORY=${SOURCE_DIRECTORY}/.log/"
       - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
       - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
     build:
@@ -60,7 +61,8 @@ services:
       - UID=${UID}
       - GID=${GID}
       - TEST_SCENARIOS=${TEST_SCENARIOS:-baseline_test.launch}
-      - "BAG_OUTPUT_DIRECTORY=${SOURCE_DIRECTORY}/.log/.ros/bag_files"
+      - "LOG_DIRECTORY=${SOURCE_DIRECTORY}/.log/"
+      - "BAG_OUTPUT_DIRECTORY=${LOG_DIRECTORY}/.ros/bag_files"
       - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
       - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
       - ADORE_CLI_IMAGE=${ADORE_CLI_IMAGE}

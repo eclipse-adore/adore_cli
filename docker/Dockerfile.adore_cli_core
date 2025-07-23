@@ -80,7 +80,13 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     apt-get update && \
     apt-get install --no-install-recommends -y $(sed '/^#/d' ${REQUIREMENTS_FILE} | sed '/^$/d')
 
+#CMD exec /bin/bash -c "trap : TERM INT; [ -f /tmp/adore/setup.sh ] && source /tmp/adore/setup.sh; sudo rsyslogd -n & sleep infinity & wait"
+#CMD exec /bin/bash -c "trap : TERM INT; sudo rsyslogd -n & sleep infinity & wait"
 
-CMD exec /bin/bash -c "trap : TERM INT; sudo rsyslogd -n & sleep infinity & wait"
+COPY docker/files/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 USER $USER
 WORKDIR /tmp/adore
+
+ENTRYPOINT ["/entrypoint.sh"]

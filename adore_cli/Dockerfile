@@ -36,7 +36,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     find . -maxdepth 1 -type f -name '*.pip3' -exec cat {} + 2>/dev/null | \
-    xargs -r python3 -m pip install --break-system-packages
+    xargs -r python3 -m pip install --ignore-installed --break-system-packages
 
 COPY .tmp/packages/. /tmp/
 WORKDIR /tmp
