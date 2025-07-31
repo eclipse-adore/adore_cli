@@ -12,10 +12,11 @@ services:
     environment:
       - HOSTNAME=${HOSTNAME:-ADORe-CLI}
       - TEST_SCENARIOS=${TEST_SCENARIOS:-baseline_test.launch}
-      - "BAG_OUTPUT_DIRECTORY=${SOURCE_DIRECTORY}/.log/.ros/bag_files"
-      - "LOG_DIRECTORY=${SOURCE_DIRECTORY}/.log/"
+      - SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-.}
+      - LOG_DIRECTORY=${SOURCE_DIRECTORY:-/default/source}/.log/
       - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
       - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4 
     build:
       context: ${ADORE_CLI_MAKEFILE_PATH}
       network: host
@@ -50,8 +51,8 @@ services:
     environment:
       - ROS_DISTRO=${ROS_DISTRO:-jazzy}
       - HOSTNAME=${HOSTNAME:-ADORe-CLI}
+      - SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-.}
       - ADORE_SOURCE_DIRECTORY=${SOURCE_DIRECTORY}
-      - SOURCE_DIRECTORY=${SOURCE_DIRECTORY}
       - ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY}
       - DISPLAY_MODE=${DISPLAY_MODE:-native}
       # - DISPLAY_MODE=${DISPLAY_MODE:-window_manager}
@@ -61,12 +62,12 @@ services:
       - UID=${UID}
       - GID=${GID}
       - TEST_SCENARIOS=${TEST_SCENARIOS:-baseline_test.launch}
-      - "LOG_DIRECTORY=${SOURCE_DIRECTORY}/.log/"
-      - "BAG_OUTPUT_DIRECTORY=${LOG_DIRECTORY}/.ros/bag_files"
+      - LOG_DIRECTORY=${SOURCE_DIRECTORY:-/default/source}/.log/
       - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
       - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
       - ADORE_CLI_IMAGE=${ADORE_CLI_IMAGE}
       - ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME}
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4 
     build:
       context: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli
       network: host
