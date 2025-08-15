@@ -21,6 +21,9 @@ DOCKER_PLATFORM ?= linux/$(ARCH)
 CROSS_COMPILE ?= $(shell if [ "$(shell uname -m)" != "$(ARCH)" ]; then echo "true"; else echo "false"; fi)
 MINIMUM_DOCKER_VERSION=28
 
+ADORE_CLI_TAG_HISTORY_FILE:=${SOURCE_DIRECTORY}/.log/adore_cli_tag_history
+
+
 BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
 SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
 PARENT_BRANCH?= $(shell bash $(MAKE_GADGETS_PATH)/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
@@ -104,13 +107,65 @@ stop_adore_cli: docker_host_context_check adore_cli_teardown
 
 .PHONY: cli 
 cli: docker_host_context_check ## Start ADORe CLI docker context or attach to it if it is already running
-	@if [[ "$$(docker inspect -f '{{.State.Running}}' '${ADORE_CLI_CONTAINER_NAME}' 2>/dev/null)" == "true"  ]]; then\
-        cd "${ADORE_CLI_MAKEFILE_PATH}" && make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_attach;\
-        exit 0;\
-    else\
-        cd "${ADORE_CLI_MAKEFILE_PATH}" && make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_up;\
-        exit 0;\
-    fi;
+	@mkdir -p "${SOURCE_DIRECTORY}/.log"
+	@EFFECTIVE_TAG="${ADORE_CLI_TAG}"; \
+	EFFECTIVE_CONTAINER_NAME="${ADORE_CLI_CONTAINER_NAME}"; \
+	EFFECTIVE_IMAGE="${ADORE_CLI_IMAGE}"; \
+	if [ -f "${ADORE_CLI_TAG_HISTORY_FILE}" ]; then \
+	    LAST_INFO=$$(cat "${ADORE_CLI_TAG_HISTORY_FILE}" 2>/dev/null || echo ""); \
+	    if [ -n "$$LAST_INFO" ]; then \
+	        LAST_TAG=$$(echo "$$LAST_INFO" | cut -d'|' -f1); \
+	        LAST_CONTAINER_NAME=$$(echo "$$LAST_INFO" | cut -d'|' -f2); \
+	        LAST_IMAGE=$$(echo "$$LAST_INFO" | cut -d'|' -f3); \
+	        if [ "$$LAST_TAG" != "${ADORE_CLI_TAG}" ]; then \
+	            echo "Warning: ADORE_CLI tag has changed"; \
+	            echo "  Previous: $$LAST_IMAGE"; \
+	            echo "  Current:  ${ADORE_CLI_IMAGE}"; \
+	            echo; \
+	            if [[ "$$(docker inspect -f '{{.State.Running}}' "$$LAST_CONTAINER_NAME" 2>/dev/null)" == "true" ]]; then \
+	                echo "Previous container is still running: $$LAST_CONTAINER_NAME"; \
+	                read -p "Choose action: (r)ebuild with new tag, (a)ttach to old container, or (q)abort? [r/a/q]: " choice; \
+	            else \
+	                read -p "Choose action: (r)ebuild with new tag, (a)ttach with old tag, or (q)abort? [r/a/q]: " choice; \
+	            fi; \
+	            case $$choice in \
+	                a|A) \
+	                    if [[ "$$(docker inspect -f '{{.State.Running}}' "$$LAST_CONTAINER_NAME" 2>/dev/null)" == "true" ]]; then \
+	                        echo "Attaching to previous container: $$LAST_CONTAINER_NAME"; \
+	                    else \
+	                        echo "Using previous tag: $$LAST_TAG"; \
+	                    fi; \
+	                    EFFECTIVE_TAG="$$LAST_TAG"; \
+	                    EFFECTIVE_CONTAINER_NAME="$$LAST_CONTAINER_NAME"; \
+	                    EFFECTIVE_IMAGE="$$LAST_IMAGE"; \
+	                    ;; \
+	                q|Q) \
+	                    echo "Aborted by user"; \
+	                    exit 1; \
+	                    ;; \
+	                *) \
+	                    echo "Rebuilding with new tag: ${ADORE_CLI_TAG}"; \
+	                    echo "${ADORE_CLI_TAG}|${ADORE_CLI_CONTAINER_NAME}|${ADORE_CLI_IMAGE}" > "${ADORE_CLI_TAG_HISTORY_FILE}"; \
+	                    ;; \
+	            esac; \
+	        fi; \
+	    else \
+	        echo "${ADORE_CLI_TAG}|${ADORE_CLI_CONTAINER_NAME}|${ADORE_CLI_IMAGE}" > "${ADORE_CLI_TAG_HISTORY_FILE}"; \
+	    fi; \
+	else \
+	    echo "${ADORE_CLI_TAG}|${ADORE_CLI_CONTAINER_NAME}|${ADORE_CLI_IMAGE}" > "${ADORE_CLI_TAG_HISTORY_FILE}"; \
+    fi; \
+    if [[ "$$(docker inspect -f '{{.State.Running}}' "$$EFFECTIVE_CONTAINER_NAME" 2>/dev/null)" == "true" ]]; then \
+        echo "Attaching to existing container: $$EFFECTIVE_CONTAINER_NAME"; \
+        docker exec -it "$$EFFECTIVE_CONTAINER_NAME" /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true; \
+    else \
+        echo "Starting new container with tag: $$EFFECTIVE_TAG"; \
+        cd "${ADORE_CLI_MAKEFILE_PATH}" && \
+        ADORE_CLI_TAG="$$EFFECTIVE_TAG" \
+        ADORE_CLI_CONTAINER_NAME="$$EFFECTIVE_CONTAINER_NAME" \
+        ADORE_CLI_IMAGE="$$EFFECTIVE_IMAGE" \
+        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_up; \
+    fi
 
 .PHONY: build_fast_adore_cli_core
 build_fast_adore_cli: # Build the adore_cli core context if it does not already exist in the docker repository. If it does exist this is a noop.
@@ -118,15 +173,20 @@ build_fast_adore_cli: # Build the adore_cli core context if it does not already 
 	@[ ! -n "$$(docker images -q ${ADORE_CLI_IMAGE})" ] && cd "${ADORE_CLI_MAKEFILE_PATH}/adore_cli" && make build || true
 
 .PHONY: build_adore_cli_core
-build_adore_cli_core: clean_adore_cli ## Builds the ADORe CLI core docker context/image
+build_adore_cli_core: clean_adore_cli
+	@echo "Clearing tag history due to rebuild"
+	@rm -f "${ADORE_CLI_TAG_HISTORY_FILE}"
 	cd "${ADORE_CLI_MAKEFILE_PATH}" && make _build_adore_cli_core 
 
 .PHONY: build_adore_cli
-build_adore_cli: ## Builds the ADORe CLI runtime docker context/image
+build_adore_cli:
+	@echo "Clearing tag history due to rebuild"
+	@rm -f "${ADORE_CLI_TAG_HISTORY_FILE}"
 	cd "${ADORE_CLI_MAKEFILE_PATH}/adore_cli" && make build 
 
 .PHONY: clean_adore_cli 
-clean_adore_cli: ## Clean adore_cli docker context 
+clean_adore_cli:
+	@rm -f "${ADORE_CLI_TAG_HISTORY_FILE}"
 	cd "${ADORE_CLI_MAKEFILE_PATH}" && make clean
 	cd "${ADORE_CLI_MAKEFILE_PATH}/adore_cli" && make clean
 
