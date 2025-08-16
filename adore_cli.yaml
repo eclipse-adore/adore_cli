@@ -1,82 +1,116 @@
-services: 
+# ADORe CLI Docker Compose Services Configuration
+# 
+# This file defines the core ADORe CLI development environment services:
+# - adore_cli_core: Base ROS2 environment with minimal dependencies (DEPRECATED - kept for compatibility)
+# - adore_cli: Full development environment with tools and GUI support
+#
+# The three-layer architecture provides:
+# - System base: OS + ROS2 foundation (user-agnostic, highly cacheable)
+# - Core environment: Complete ROS2 tools (user-agnostic, shareable)  
+# - User layer: User-specific customization (thin, fast to build)
+# - Runtime: Full development environment with discovered requirements
+
+# === SHARED CONFIGURATION ANCHORS ===
+# These YAML anchors reduce duplication and ensure consistency
+
+x-common-config: &common-config
+  privileged: true
+  platform: ${DOCKER_PLATFORM:-linux/amd64}
+  user: ${USER}
+  hostname: ${HOSTNAME:-ADORe-CLI}
+  network_mode: "host"
+  ipc: "host"
+  pid: "host"
+
+x-common-environment: &common-environment
+  HOSTNAME: ${HOSTNAME:-ADORe-CLI}
+  SOURCE_DIRECTORY: ${SOURCE_DIRECTORY:-.}
+  LOG_DIRECTORY: ${SOURCE_DIRECTORY:-/default/source}/.log/
+  ROS_HOME: ${SOURCE_DIRECTORY}/.log/.ros
+  HISTFILE: ${SOURCE_DIRECTORY}/.zsh_history
+  FASTDDS_BUILTIN_TRANSPORTS: UDPv4
+  USER: ${USER}
+  UID: ${UID}
+  GID: ${GID}
+
+x-common-build-args: &common-build-args
+  HOSTNAME: ${HOSTNAME:-ADORe-CLI}
+  USER: ${USER}
+  UID: ${UID:-1000}
+  GID: ${GID:-1001}
+  ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+  OS_CODE_NAME: ${OS_CODE_NAME:-noble}
+  BRANCH: ${BRANCH}
+  SHORT_HASH: ${SHORT_HASH}
+  ARCH: ${ARCH}
+
+# === SERVICE DEFINITIONS ===
+
+services:
+  # === LEGACY CORE SERVICE ===
+  # DEPRECATED: Kept for backward compatibility only
+  # New builds use the three-layer architecture instead
   adore_cli_core:
-    privileged: true
-    platform: ${DOCKER_PLATFORM:-linux/amd64}
-    image: ${ADORE_CLI_CORE_IMAGE}
+    <<: *common-config
+    image: ${ADORE_CLI_USER_IMAGE}
     container_name: ${ADORE_CLI_CONTAINER_NAME}
-    user: ${USER}
-    hostname: ${HOSTNAME:-ADORe-CLI}
-    network_mode: "host"
-    ipc: "host"
-    pid: "host"
+    
+    # === ENVIRONMENT VARIABLES ===
     environment:
-      - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-      - TEST_SCENARIOS=${TEST_SCENARIOS:-baseline_test.launch}
-      - SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-.}
-      - LOG_DIRECTORY=${SOURCE_DIRECTORY:-/default/source}/.log/
-      - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
-      - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
-      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4 
+      <<: *common-environment
+      TEST_SCENARIOS: ${TEST_SCENARIOS:-baseline_test.launch}
+    
+    # === BUILD CONFIGURATION ===
+    # Note: This builds the user layer, not the legacy core
     build:
       context: ${ADORE_CLI_MAKEFILE_PATH}
       network: host
       dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core
+      target: adore_cli_user
       args:
-        - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-        - USER=${USER}
-        - UID=${UID:-1000}
-        - GID=${GID:-1001}
-        - ROS_DISTRO=${ROS_DISTRO:-jazzy}
-        - OS_CODE_NAME=${OS_CODE_NAME:-noble}
+        <<: *common-build-args
+    
+    # === VOLUME MOUNTS ===
     volumes:
-      - ./:/tmp/adore
       - /var/run/docker.sock:/var/run/docker.sock
       - .zsh_history:/home/${USER}/.zsh_history
       - .zsh_history:/home/${USER}/.zsh_history.new
+      - ./:/tmp/adore
       - ${SOURCE_DIRECTORY}:/tmp/adore
       - ${SOURCE_DIRECTORY}:${SOURCE_DIRECTORY}
       - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache
       - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
 
+  # === FULL DEVELOPMENT SERVICE ===
+  # Complete development environment with GUI support and development tools
+  # Used for: Interactive development, graphical applications, full feature set
   adore_cli:
-    privileged: true
-    platform: ${DOCKER_PLATFORM:-linux/amd64}
-    ipc: "host"
-    pid: "host"
+    <<: *common-config
     image: ${ADORE_CLI_IMAGE}
     container_name: ${ADORE_CLI_CONTAINER_NAME}
-    user: ${USER} 
-    hostname: ${HOSTNAME:-ADORe-CLI}
-    network_mode: "host"
+    
+    # === ENVIRONMENT VARIABLES ===
     environment:
-      - ROS_DISTRO=${ROS_DISTRO:-jazzy}
-      - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-      - SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-.}
-      - ADORE_SOURCE_DIRECTORY=${SOURCE_DIRECTORY}
-      - ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY}
-      - DISPLAY_MODE=${DISPLAY_MODE:-native}
-      # - DISPLAY_MODE=${DISPLAY_MODE:-window_manager}
-      # - DISPLAY_MODE=${DISPLAY_MODE:-headless}
-      - DISPLAY=${DISPLAY}
-      - USER=${USER}
-      - UID=${UID}
-      - GID=${GID}
-      - TEST_SCENARIOS=${TEST_SCENARIOS:-baseline_test.launch}
-      - LOG_DIRECTORY=${SOURCE_DIRECTORY:-/default/source}/.log/
-      - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
-      - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
-      - ADORE_CLI_IMAGE=${ADORE_CLI_IMAGE}
-      - ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME}
-      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4 
+      <<: *common-environment
+      ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+      ADORE_SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}
+      ADORE_CLI_WORKING_DIRECTORY: ${ADORE_CLI_WORKING_DIRECTORY}
+      TEST_SCENARIOS: ${TEST_SCENARIOS:-baseline_test.launch}
+      ADORE_CLI_IMAGE: ${ADORE_CLI_IMAGE}
+      ADORE_CLI_CONTAINER_NAME: ${ADORE_CLI_CONTAINER_NAME}
+      DISPLAY_MODE: ${DISPLAY_MODE:-native}
+      DISPLAY: ${DISPLAY}
+    
+    # === BUILD CONFIGURATION ===
     build:
       context: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli
       network: host
       dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile
       args:
-        - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-        - USER=${USER}
-        - UID=${UID:-1000}
-        - GID=${GID:-1001}
+        <<: *common-build-args
+        ADORE_CLI_USER_IMAGE: ${ADORE_CLI_USER_IMAGE}
+    
+    # === VOLUME MOUNTS ===
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /var/run/docker.sock:/var/run/docker.sock
@@ -86,5 +120,50 @@ services:
       - ${SOURCE_DIRECTORY}:${SOURCE_DIRECTORY}
       - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache
       - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
+    
+    # === NETWORK CONFIGURATION ===
     extra_hosts:
       - "${HOSTNAME:-ADORe-CLI}:127.0.0.1"
+
+# === CONFIGURATION NOTES ===
+#
+# THREE-LAYER ARCHITECTURE:
+# 1. System Base (adore_cli_system): OS + ROS2 foundation
+#    - Tag: ${BRANCH}_${SHORT_HASH}_${ARCH}
+#    - User-agnostic, highly cacheable
+#    - Shared across all users and environments
+#
+# 2. Core Environment (adore_cli_core): Complete ROS2 environment  
+#    - Tag: ${BRANCH}_${SHORT_HASH}_${ARCH}
+#    - User-agnostic, includes all development tools
+#    - Shared across all users for same git commit
+#
+# 3. User Layer (adore_cli_user): User-specific customization
+#    - Tag: ${BRANCH}_${SHORT_HASH}_${ARCH}_${USER}
+#    - Thin layer with only user configuration
+#    - Fast to build, specific to each user
+#
+# 4. Runtime (adore_cli): Full development environment
+#    - Tag: Complex tag including parent project info
+#    - Includes all discovered requirements
+#    - Final development-ready image
+#
+# SECURITY CONSIDERATIONS:
+# - privileged: true - Required for hardware access and container management
+# - Docker socket mount - Enables container management from within container
+# - Host networking - Simplifies ROS2 networking and reduces latency
+#
+# DISPLAY MODES:
+# - native: Direct X11 forwarding to host display (best performance)
+# - window_manager: Isolated display with window manager
+# - headless: No display server (for CI/CD and remote operations)
+#
+# VOLUME STRATEGY:
+# - Source code is mounted at multiple paths for flexibility
+# - Build cache (.ccache) persists between container rebuilds
+# - Shell history persists for better development experience
+# - Logs are accessible from both host and container
+#
+# NETWORKING:
+# - Host networking mode simplifies ROS2 multi-machine communication
+# - IPC and PID sharing enables advanced debugging and system integration

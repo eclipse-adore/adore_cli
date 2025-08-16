@@ -12,7 +12,6 @@ SCRIPT_DIRECTORY="/tmp/adore/tools/adore_cli/tools"
 #SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-/tmp/adore}
 ADORE_CLI_DIRECTORY=${ADORE_CLI_DIRECTORY:-/tmp/adore_cli}
 #ADORE_CLI_WORKING_DIRECTORY=${SOURCE_DIRECTORY:-/tmp/adore}
-#CATKIN_WORKSPACE_DIRECTORY=${CATKIN_WORKSPACE_DIRECTORY:-/tmp/adore_cli/catkin_workspace}
 
 if [[ -z ${SOURCE_DIRECTORY+x} ]]; then
     echoerr "ERROR: The environmental variable SOURCE_DIRECTORY is empty, SOURCE_DIRECTORY must be supplied."
@@ -37,6 +36,7 @@ bash "/tmp/adore_cli/tools/adore_cli_motd.sh"
 printf "\n"
 bash "/tmp/adore_cli/tools/git_repo_status.sh"
 bash "/tmp/adore_cli/tools/requirements_file_change_status.sh"
+bash "/tmp/adore_cli/tools/check_vendor_dependencies.sh"
 
 printf "\n"
 

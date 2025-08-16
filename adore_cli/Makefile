@@ -1,4 +1,6 @@
 SHELL := /bin/bash
+MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
+
 
 .DEFAULT_GOAL := all
 
@@ -25,17 +27,29 @@ DOCKER_PLATFORM?=linux/$(ARCH)
 include ../adore_cli.mk
 include ${ADORE_CLI_MAKEFILE_PATH}/make_gadgets/make_gadgets.mk
 
+# Target: build
+# Description: Builds the ADORe CLI runtime development environment
+# - Uses the user-customized core image as the base layer
+# - Gathers and installs all discovered requirements from the project tree
+# - Creates the final development environment with tools and dependencies
+# - Supports both native and cross-compilation builds
 .PHONY: build
 build: clean gather
+	@echo "Building ADORe CLI runtime environment..."
+	@echo "Base image: ${ADORE_CLI_USER_IMAGE}"
+	@echo "Target image: ${ADORE_CLI_IMAGE}"
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
 		echo "Cross-compiling for $(ARCH)..."; \
 		docker buildx build \
 			--builder=default \
 			--platform $(DOCKER_PLATFORM) \
 			--tag ${ADORE_CLI_IMAGE} \
-			--build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
+			--build-arg ADORE_CLI_USER_IMAGE=${ADORE_CLI_USER_IMAGE} \
 			--build-arg ROS_DISTRO=${ROS_DISTRO} \
 			--build-arg OS_CODE_NAME=${OS_CODE_NAME} \
+			--build-arg BRANCH=${BRANCH} \
+			--build-arg SHORT_HASH=${SHORT_HASH} \
+			--build-arg ARCH=${ARCH} \
 			--build-arg USER=${USER} \
 			--build-arg UID=${UID} \
 			--build-arg GID=${GID} \
@@ -44,9 +58,12 @@ build: clean gather
 	else \
 		docker build --network host \
 			--tag ${ADORE_CLI_IMAGE} \
-			--build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
+			--build-arg ADORE_CLI_USER_IMAGE=${ADORE_CLI_USER_IMAGE} \
 			--build-arg ROS_DISTRO=${ROS_DISTRO} \
 			--build-arg OS_CODE_NAME=${OS_CODE_NAME} \
+			--build-arg BRANCH=${BRANCH} \
+			--build-arg SHORT_HASH=${SHORT_HASH} \
+			--build-arg ARCH=${ARCH} \
 			--build-arg USER=${USER} \
 			--build-arg UID=${UID} \
 			--build-arg GID=${GID} \
@@ -54,9 +71,14 @@ build: clean gather
 			--build-arg USER=${USER} . ; \
 	fi
 
-
+# Target: gather
+# Description: Collects all requirements files and packages for the build
+# - Executes requirements gathering script to scan project tree
+# - Copies vendor packages and makefiles to build context
+# - Sets proper permissions and timestamps for reproducible builds
 .PHONY: gather
 gather:
+	@echo "Gathering requirements and packages..."
 	bash gather_requirements_files.sh
 	mkdir -p ${TMP_DIR}/packages
 	find "${VENDOR_PATH}" -type f -name "*.deb" -exec cp {} "${TMP_DIR}/packages" \;
@@ -73,9 +95,16 @@ debug_run:
 debug_run_root:
 	docker run -it --rm --user root --entrypoint /bin/bash ${ADORE_CLI_IMAGE}
 
+# Target: clean
+# Description: Comprehensive cleanup of build artifacts and images
+# - Removes temporary build directory and all contents
+# - Removes the runtime Docker image from local registry
+# - Cleans up dangling images to free disk space
 .PHONY: clean
 clean:
-	rm -rf ${TMP_DIR}
-	docker rmi $$(docker images -q ${ADORE_CLI_IMAGE}) --force 2>/dev/null || true
-	docker rmi $$(docker images --filter "dangling=true" -q) --force > /dev/null 2>&1 || true
-
+	@echo "Cleaning adore_cli runtime build artifacts..."
+	@rm -rf ${TMP_DIR}
+	@echo "Removing runtime image: ${ADORE_CLI_IMAGE}"
+	@docker rmi $$(docker images -q ${ADORE_CLI_IMAGE}) --force 2>/dev/null || true
+	@echo "Removing dangling images..."
+	@docker rmi $$(docker images --filter "dangling=true" -q) --force > /dev/null 2>&1 || true

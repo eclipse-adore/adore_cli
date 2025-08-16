@@ -3,10 +3,19 @@ name: CI_native_arm64
 
 on:
   push:
+  pull_request:
+    branches: [ ros2 ]
+
+env:
+  REGISTRY: ghcr.io
+  GITHUB_REPOSITORY_LOWER: ${{ github.repository_owner }}
 
 jobs:
   CI_native_arm64:
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Init
@@ -14,16 +23,30 @@ jobs:
           df -h
           sudo apt-get update
 
-      - name: Maximize free space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: true
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
+      - name: Free up disk space
+        run: |
+          echo "Initial disk usage:"
+          df -h
+          echo "Removing unnecessary packages and files..."
+          
+          sudo rm -rf /opt/hostedtoolcache 2>/dev/null || true
+          sudo rm -rf /usr/local/lib/android 2>/dev/null || true
+          sudo rm -rf /opt/android 2>/dev/null || true
+          sudo rm -rf /usr/share/dotnet 2>/dev/null || true
+          sudo rm -rf /opt/ghc 2>/dev/null || true
+          sudo rm -rf /usr/local/.ghcup 2>/dev/null || true
+          
+          sudo apt-get remove -y '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' '^mysql-.*' '^php.*' azure-cli google-cloud-sdk hhvm google-chrome-stable firefox powershell mono-devel libgl1-mesa-dri 2>/dev/null || true
+          sudo apt-get autoremove -y 2>/dev/null || true
+          sudo apt-get clean 2>/dev/null || true
+          
+          docker image prune -af 2>/dev/null || true
+          
+          sudo swapoff -a 2>/dev/null || true
+          sudo rm -f /swapfile /mnt/swapfile 2>/dev/null || true
+          
+          echo "Disk usage after cleanup:"
+          df -h
 
       - name: Freespace Check
         run: |
@@ -44,15 +67,33 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Set up environment variables
+        run: |
+          echo "GITHUB_REPOSITORY_LOWER=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "REGISTRY_PREFIX=ghcr.io/$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')/" >> $GITHUB_ENV
 
       - name: Install requirements
         run: |
           df -h
           sudo apt-get update
           sudo apt-get install -y make
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Try Pull Base Images from Registry
+        run: |
+          echo "Attempting to pull base and core images from registry..."
+          make try_pull_base_images || echo "Base images not found in registry, will build locally"
 
       - name: Build
         run: |
@@ -65,28 +106,21 @@ jobs:
           df -h
           make ci_test
 
-      - name: Login to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Tag Docker Images
+      - name: Push Base and Core Images
         run: |
-          IMAGES=$(make images_adore_cli)
-          REPO=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          for IMAGE in $IMAGES; do
-            docker tag $IMAGE ghcr.io/${REPO}/$IMAGE
-          done
+          echo "Pushing base and core images to registry..."
+          make push_base_images
+        if: github.event_name == 'push'
 
-      - name: Push Docker Images
+      - name: Cleanup Old Registry Images
         run: |
-          IMAGES=$(make images_adore_cli)
-          REPO=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          for IMAGE in $IMAGES; do
-            docker push ghcr.io/${REPO}/$IMAGE
-          done
+          echo "Cleaning up old images, keeping last 2 commits for ros2 branch..."
+          make cleanup_registry_images
+        if: github.ref == 'refs/heads/ros2' && github.event_name == 'push'
 
       - name: Upload Logs
         uses: actions/upload-artifact@v4
         with:
-          name: logs
+          name: logs-arm64
           path: .log
         if: always()

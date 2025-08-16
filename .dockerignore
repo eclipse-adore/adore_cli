@@ -1,7 +1,6 @@
 .log/
 .zsh_history*
 .bash_history
-catkin_workspace/
 .config
 adore_cli
 adore_cli/
@@ -11,3 +10,4 @@ adore_cli/
 adore_cli_core
 build
 **/.tmp
+ros2_workspace
