@@ -35,7 +35,7 @@ if [ ! -d "${SEARCH_DIR}" ]; then
     exit 1
 fi
 
-echo "Search directory contents:"
+echo "Search directory contents (first 10 items):"
 ls -la "${SEARCH_DIR}" | head -10
 
 # Create the requirements directory
@@ -47,35 +47,62 @@ echo "Creating requirement files..."
 > "${REQUIREMENTS_DIR}/combined_requirements.pip3"
 > "${REQUIREMENTS_DIR}/combined_requirements.ppa"
 
-echo "Searching for .system files..."
-find "${SEARCH_DIR}" -type f -name "*.system" ! -path "*/ros_translator/*" 2>/dev/null | while read -r file; do
-    echo "Found .system file: $file"
-done
+# Function to search and process files
+search_and_process() {
+    local file_pattern="$1"
+    local output_file="$2"
+    local description="$3"
+    
+    echo "Searching for ${description} files..."
+    
+    # Find files matching pattern, excluding certain directories
+    local found_files
+    found_files=$(find "${SEARCH_DIR}" -type f -name "${file_pattern}" \
+        ! -path "*/ros_translator/*" \
+        ! -path "*/.log/*" \
+        ! -path "*/.git/*" \
+        ! -path "*/build/*" \
+        ! -path "*/.tmp/*" \
+        2>/dev/null || true)
+    
+    if [ -n "$found_files" ]; then
+        echo "Found ${description} files:"
+        echo "$found_files" | while read -r file; do
+            echo "  Processing: $file"
+        done
+        
+        # Process all found files
+        echo "$found_files" | while read -r file; do
+            if [ -f "$file" ]; then
+                echo "# From: $file" >> "${output_file}"
+                cat "$file" >> "${output_file}"
+                echo "" >> "${output_file}"
+            fi
+        done
+        
+        # Clean up the output: remove comments, empty lines, and duplicates
+        local temp_file="${output_file}.tmp"
+        sed '/^#/d' "${output_file}" | sed '/^$/d' | sort -u > "${temp_file}"
+        mv "${temp_file}" "${output_file}"
+        
+        local count=$(wc -l < "${output_file}" 2>/dev/null || echo "0")
+        echo "Processed ${count} unique ${description} entries"
+    else
+        echo "No ${description} files found"
+        touch "${output_file}"
+    fi
+}
 
-SYSTEM_FILES=$(find "${SEARCH_DIR}" -type f -name "*.system" ! -path "*/ros_translator/*" 2>/dev/null)
-if [ -n "$SYSTEM_FILES" ]; then
-    echo "$SYSTEM_FILES" | while read -r file; do
-        echo "Processing: $file"
-        cat "$file"
-    done | sed '/^#/d' | sed '/^$/d' | sort -u > "${REQUIREMENTS_DIR}/combined_requirements.system"
-fi
+# Search for different types of requirement files
+search_and_process "*.system" "${REQUIREMENTS_DIR}/combined_requirements.system" "system package"
+search_and_process "*.pip3" "${REQUIREMENTS_DIR}/combined_requirements.pip3" "Python pip3"
+search_and_process "requirements.ppa" "${REQUIREMENTS_DIR}/combined_requirements.ppa" "PPA"
 
-echo "Searching for .pip3 files..."
-PIP3_FILES=$(find "${SEARCH_DIR}" -type f -name "*.pip3" 2>/dev/null)
-if [ -n "$PIP3_FILES" ]; then
-    echo "$PIP3_FILES" | while read -r file; do
-        echo "Processing: $file"
-        cat "$file"
-    done | sed '/^#/d' | sed '/^$/d' | sort -u > "${REQUIREMENTS_DIR}/combined_requirements.pip3"
-fi
-
-echo "Searching for .ppa files..."
-PPA_FILES=$(find "${SEARCH_DIR}" -type f -name "requirements.ppa" 2>/dev/null)
-if [ -n "$PPA_FILES" ]; then
-    echo "$PPA_FILES" | while read -r file; do
-        echo "Processing: $file"
-        cat "$file"
-    done | sed '/^#/d' | sed '/^$/d' | grep '^ppa:' | sort -u > "${REQUIREMENTS_DIR}/combined_requirements.ppa"
+# Special handling for .ppa files (only include lines starting with 'ppa:')
+if [ -s "${REQUIREMENTS_DIR}/combined_requirements.ppa" ]; then
+    echo "Filtering PPA entries to only include 'ppa:' lines..."
+    grep '^ppa:' "${REQUIREMENTS_DIR}/combined_requirements.ppa" > "${REQUIREMENTS_DIR}/combined_requirements.ppa.tmp" || touch "${REQUIREMENTS_DIR}/combined_requirements.ppa.tmp"
+    mv "${REQUIREMENTS_DIR}/combined_requirements.ppa.tmp" "${REQUIREMENTS_DIR}/combined_requirements.ppa"
 fi
 
 echo "Requirements stored in: ${REQUIREMENTS_DIR}"
@@ -84,13 +111,28 @@ ls -la "${REQUIREMENTS_DIR}"
 echo "File line counts:"
 wc -l "${REQUIREMENTS_DIR}"/* 2>/dev/null || true
 
-# Copy to local build context for Docker
-LOCAL_REQUIREMENTS_DIR="${SCRIPT_DIRECTORY}/.log/.adore_cli/requirements"
-echo "Copying to local build context: ${LOCAL_REQUIREMENTS_DIR}"
-mkdir -p "${LOCAL_REQUIREMENTS_DIR}"
-cp "${REQUIREMENTS_DIR}"/* "${LOCAL_REQUIREMENTS_DIR}/" 2>/dev/null || true
+# Generate a manifest of the requirements for change detection
+echo "=== Generating requirements manifest ==="
+MANIFEST_FILE="${REQUIREMENTS_DIR}/requirements_manifest.sha256"
 
-echo "Build context verification:"
-ls -la "${LOCAL_REQUIREMENTS_DIR}" 2>/dev/null || echo "No files in build context"
+# Find all requirement files that were used to generate the combined files
+find "${SEARCH_DIR}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) \
+    ! -path "*/ros_translator/*" \
+    ! -path "*/.log/*" \
+    ! -path "*/.git/*" \
+    ! -path "*/build/*" \
+    ! -path "*/.tmp/*" \
+    2>/dev/null | \
+    xargs -r sha256sum 2>/dev/null | sort > "${MANIFEST_FILE}" || touch "${MANIFEST_FILE}"
+
+echo "Requirements manifest created with $(wc -l < "${MANIFEST_FILE}" 2>/dev/null || echo "0") entries"
+
+# Also create manifests of the combined files themselves
+echo "=== Creating combined file manifests ==="
+find "${REQUIREMENTS_DIR}" -name "combined_requirements.*" -type f 2>/dev/null | \
+    xargs -r sha256sum 2>/dev/null | sort >> "${MANIFEST_FILE}" || true
+
+echo "Final manifest:"
+cat "${MANIFEST_FILE}" 2>/dev/null || echo "Empty manifest"
 
 echo "=== Requirements gathering complete ==="
