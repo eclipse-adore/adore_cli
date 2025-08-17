@@ -1,0 +1,74 @@
+# === BUILD ARGUMENTS ===
+# These must be declared before FROM to be available in base image selection
+ARG ADORE_CLI_CORE_IMAGE=adore_cli_core:latest
+
+# === ADORE CLI USER LAYER ===
+# Final user-customized layer that adds user account and installs .deb packages
+# This layer is user-specific and cannot be shared between users
+FROM ${ADORE_CLI_CORE_IMAGE} AS adore_cli
+
+# Re-declare ARGs for use within this stage
+ARG USER
+ARG UID
+ARG GID
+ARG HOSTNAME
+ARG ARCH
+ARG BRANCH
+ARG SHORT_HASH
+ARG PARENT_BRANCH
+ARG PARENT_SHORT_HASH
+ARG ROS_DISTRO
+ARG OS_CODE_NAME
+
+ENV ROS_DISTRO=${ROS_DISTRO}
+ENV OS_CODE_NAME=${OS_CODE_NAME}
+
+# === METADATA LABELS ===
+LABEL org.adore.version="${ARCH}_${BRANCH}_${SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}"
+LABEL org.adore.user="${USER}"
+LABEL org.adore.uid="${UID}"
+LABEL org.adore.gid="${GID}"
+LABEL org.adore.hostname="${HOSTNAME}"
+LABEL org.adore.image-type="user-customized"
+LABEL org.adore.user-agnostic="false"
+
+# === DEBIAN PACKAGES INSTALLATION ===
+# Install .deb packages if present (user-specific packages)
+# Copy from build context packages directory
+USER root
+COPY packages/. /tmp/
+WORKDIR /tmp
+
+RUN find . -maxdepth 1 -type f -name "*.deb" -print0 | \
+    xargs -0 sudo dpkg -i --force-all 2>/dev/null || true
+
+# === USER MANAGEMENT ===
+# Remove default user if exists
+RUN userdel --remove ubuntu 2>/dev/null || true && \
+    rm -rf /home/ubuntu 2>/dev/null || true
+
+# Create user with specified UID/GID
+RUN groupadd --gid ${GID} ${USER} 2>/dev/null || true && \
+    useradd --create-home --uid ${UID} --gid ${GID} --shell /bin/zsh ${USER}
+
+# === USER-SPECIFIC SHELL SETUP ===
+# Copy shell configuration and set ownership
+RUN cp /etc/skel/.zshrc /home/${USER}/ && \
+    chown -R ${UID}:${GID} /home/${USER}
+
+# === USER PERMISSIONS ===
+# Add user to necessary groups
+RUN usermod -aG tracing ${USER}
+
+# Configure sudo permissions for development tasks
+RUN echo "${USER} ALL = NOPASSWD : /usr/sbin/rsyslogd, /usr/bin/apt-get, /usr/bin/apt, /usr/bin/python3, /usr/bin/apt-file, /usr/bin/apt-cache, /usr/bin/aptitude" >> /etc/sudoers
+
+# === FINAL SETUP ===
+USER ${USER}
+WORKDIR /tmp/adore
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+# === USER LAYER COMPLETE ===
+# This layer provides the complete ADORe CLI development environment
+# customized for the specific user with all dependencies installed

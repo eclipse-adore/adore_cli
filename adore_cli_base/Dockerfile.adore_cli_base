@@ -3,9 +3,10 @@
 ARG ROS_DISTRO=jazzy
 ARG OS_CODE_NAME=noble
 
-# === STAGE 1: SYSTEM BASE ===
-# Basic OS packages and ROS2 foundation - completely user-agnostic
-FROM ros:${ROS_DISTRO}-ros-core-${OS_CODE_NAME} AS system-base
+# === ADORE CLI BASE LAYER ===
+# Base ROS2 layer and tool foundation - completely user-agnostic
+# This layer contains the fundamental OS packages and ROS2 foundation
+FROM ros:${ROS_DISTRO}-ros-core-${OS_CODE_NAME} AS adore_cli_base
 
 # Re-declare ARGs for use within this stage
 ARG ROS_DISTRO
@@ -19,18 +20,18 @@ ENV ROS_DISTRO=${ROS_DISTRO}
 ENV OS_CODE_NAME=${OS_CODE_NAME}
 
 # === METADATA LABELS ===
-LABEL org.adore.version="${BRANCH}_${SHORT_HASH}_${ARCH}"
+LABEL org.adore.version="${ARCH}_${BRANCH}_${SHORT_HASH}"
 LABEL org.adore.branch="${BRANCH}"
 LABEL org.adore.commit="${SHORT_HASH}"
 LABEL org.adore.architecture="${ARCH}"
 LABEL org.adore.ros-distro="${ROS_DISTRO}"
 LABEL org.adore.os-codename="${OS_CODE_NAME}"
-LABEL org.adore.image-type="system-base"
+LABEL org.adore.image-type="base-foundation"
 LABEL org.adore.user-agnostic="true"
 
 # === BASIC SYSTEM PACKAGES ===
-ARG REQUIREMENTS_FILE="requirements.adore_cli_core.ubuntu.system"
-COPY docker/files/${REQUIREMENTS_FILE} /tmp
+ARG REQUIREMENTS_FILE="requirements.adore_cli_base.ubuntu.system"
+COPY files/${REQUIREMENTS_FILE} /tmp
 WORKDIR /tmp
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -51,37 +52,17 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     xargs -r apt-get install --no-install-recommends -y
 
 # === PYTHON FOUNDATION ===
-ARG PYTHON_REQUIREMENTS_FILE="requirements.adore_cli_core.pip3"
-COPY docker/files/${PYTHON_REQUIREMENTS_FILE} /tmp
+ARG PYTHON_REQUIREMENTS_FILE="requirements.adore_cli_base.pip3"
+COPY files/${PYTHON_REQUIREMENTS_FILE} /tmp
 
 # Process Python requirements with variable substitution
 RUN --mount=type=cache,target=/root/.cache/pip \
     envsubst < ${PYTHON_REQUIREMENTS_FILE} | sed '/^#/d' | sed '/^$/d' | \
     xargs -r python3 -m pip install --break-system-packages
 
-# === STAGE 2: CORE ENVIRONMENT (User-Agnostic) ===
-# Complete ROS2 environment with all tools but no user-specific configuration
-FROM system-base AS adore_cli_core
-
-# Re-declare ARGs for use within this stage
-ARG ROS_DISTRO
-ARG OS_CODE_NAME
-ARG BRANCH
-ARG SHORT_HASH
-ARG ARCH
-
-# Ensure environment variables are available
-ENV ROS_DISTRO=${ROS_DISTRO}
-ENV OS_CODE_NAME=${OS_CODE_NAME}
-
-# === METADATA LABELS ===
-LABEL org.adore.version="${BRANCH}_${SHORT_HASH}_${ARCH}"
-LABEL org.adore.image-type="core-environment"
-LABEL org.adore.user-agnostic="true"
-
 # === X11 AND DISPLAY PACKAGES ===
-ARG X11_REQUIREMENTS_FILE="requirements.adore_cli_core_x11_display.ubuntu.system"
-COPY docker/files/${X11_REQUIREMENTS_FILE} /tmp
+ARG X11_REQUIREMENTS_FILE="requirements.adore_cli_base_x11_display.ubuntu.system"
+COPY files/${X11_REQUIREMENTS_FILE} /tmp
 
 # Process X11 requirements with variable substitution
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
@@ -94,7 +75,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
 # === SYSTEM CONFIGURATION ===
 # Configure system services and directories
 RUN mkdir -p /var/log/ros2 && chmod -R 777 /var/log/ros2
-COPY docker/files/rsyslog.conf /etc/rsyslog.conf
+COPY files/rsyslog.conf /etc/rsyslog.conf
 
 # Create standard directories
 RUN mkdir -p /tmp/adore /opt/adore
@@ -110,8 +91,8 @@ RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /usr/share/oh-my-
     ls -la /usr/share/oh-my-zsh/oh-my-zsh.sh
 
 # === ENTRYPOINT AND SCRIPTS ===
-COPY docker/files/entrypoint.sh /entrypoint.sh
-COPY docker/files/.zshrc /etc/skel/.zshrc
+COPY files/entrypoint.sh /entrypoint.sh
+COPY files/.zshrc /etc/skel/.zshrc
 RUN chmod +x /entrypoint.sh
 
 # === TRACING SETUP ===
@@ -122,57 +103,6 @@ RUN groupadd -r tracing 2>/dev/null || true
 # Enable ccache globally
 ENV PATH="/usr/lib/ccache:${PATH}"
 
-# === STAGE 3: USER CUSTOMIZATION ===
-# Thin layer that only adds user-specific configuration
-FROM adore_cli_core AS adore_cli_user
-
-# Re-declare ARGs for use within this stage
-ARG USER
-ARG UID
-ARG GID
-ARG HOSTNAME
-ARG BRANCH
-ARG SHORT_HASH
-ARG ARCH
-ARG ROS_DISTRO
-ARG OS_CODE_NAME
-
-# Ensure environment variables are available
-ENV ROS_DISTRO=${ROS_DISTRO}
-ENV OS_CODE_NAME=${OS_CODE_NAME}
-
-# === METADATA LABELS ===
-LABEL org.adore.version="${BRANCH}_${SHORT_HASH}_${ARCH}_${USER}"
-LABEL org.adore.user="${USER}"
-LABEL org.adore.uid="${UID}"
-LABEL org.adore.gid="${GID}"
-LABEL org.adore.hostname="${HOSTNAME}"
-LABEL org.adore.image-type="user-customized"
-LABEL org.adore.user-agnostic="false"
-
-# === USER MANAGEMENT ===
-# Remove default user if exists
-RUN userdel --remove ubuntu 2>/dev/null || true && \
-    rm -rf /home/ubuntu 2>/dev/null || true
-
-# Create user with specified UID/GID
-RUN groupadd --gid ${GID} ${USER} 2>/dev/null || true && \
-    useradd --create-home --uid ${UID} --gid ${GID} --shell /bin/zsh ${USER}
-
-# === USER-SPECIFIC SHELL SETUP ===
-# Copy shell configuration and set ownership
-RUN cp /etc/skel/.zshrc /home/${USER}/ && \
-    chown -R ${UID}:${GID} /home/${USER}
-
-# === USER PERMISSIONS ===
-# Add user to necessary groups
-RUN usermod -aG tracing ${USER}
-
-# Configure sudo permissions for development tasks
-RUN echo "${USER} ALL = NOPASSWD : /usr/sbin/rsyslogd, /usr/bin/apt-get, /usr/bin/apt, /usr/bin/python3, /usr/bin/apt-file, /usr/bin/apt-cache, /usr/bin/aptitude" >> /etc/sudoers
-
-# === FINAL SETUP ===
-USER ${USER}
+# === BASE LAYER COMPLETE ===
+# This layer provides the fundamental ROS2 and development foundation
 WORKDIR /tmp/adore
-
-ENTRYPOINT ["/entrypoint.sh"]

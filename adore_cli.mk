@@ -3,18 +3,37 @@
 ifeq ($(filter adore_cli.mk, $(notdir $(MAKEFILE_LIST))), adore_cli.mk)
 
 # === SHELL AND EXPORT CONFIGURATION ===
-.EXPORT_ALL_VARIABLES:
-SHELL:=/bin/bash
-MAKEFLAGS += --no-print-directory
+SHELL := /bin/bash
+MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
 .NOTPARALLEL:
 
+# Get the adore_cli makefile path
+ADORE_CLI_MAKEFILE_PATH := $(shell dirname "$(realpath $(lastword $(MAKEFILE_LIST)))")
+
+# Only set these if they haven't been set by a parent makefile
+ROOT_DIR ?= ${ADORE_CLI_MAKEFILE_PATH}
+SOURCE_DIRECTORY ?= ${ADORE_CLI_MAKEFILE_PATH}
+
+# Set other paths relative to SOURCE_DIRECTORY (not ROOT_DIR)
+SUBMODULES_PATH ?= ${SOURCE_DIRECTORY}/tools
+VENDOR_PATH ?= ${SOURCE_DIRECTORY}/vendor
+
+# Determine if parent is adore_cli
+PARENT_IS_ADORE_CLI := $(shell [ "${SOURCE_DIRECTORY}" = "${ADORE_CLI_MAKEFILE_PATH}" ] && echo "true" || echo "false")
+
+.EXPORT_ALL_VARIABLES:
 
 # === ROS AND OS CONFIGURATION ===
-ROS_DISTRO:=jazzy
-OS_CODE_NAME:=noble
+DOCKER_BUILDKIT ?= 1
+DOCKER_CONFIG ?= 
+ROS_DISTRO ?= jazzy
+OS_CODE_NAME ?= noble
+HOSTNAME ?= "ADORe-CLI"
+
+
 
 # === PROJECT CONFIGURATION ===
-ADORE_CLI_PROJECT:=adore_cli_core
+ADORE_CLI_PROJECT:=adore_cli
 ADORE_CLI_MAKEFILE_PATH:=$(shell realpath "$(shell dirname "$(lastword $(MAKEFILE_LIST))")")
 
 # === PATH CONFIGURATION ===
@@ -31,25 +50,38 @@ DOCKER_PLATFORM ?= linux/$(ARCH)
 CROSS_COMPILE ?= $(shell if [ "$(shell uname -m)" != "$(ARCH)" ]; then echo "true"; else echo "false"; fi)
 MINIMUM_DOCKER_VERSION=28
 
-# === GIT AND BRANCH CONFIGURATION ===
-BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
-SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
+# === GIT AND BRANCH CONFIGURATION FOR ADORE CLI REPO ===
+ADORE_CLI_BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
+ADORE_CLI_SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
+
+# === GIT AND BRANCH CONFIGURATION FOR PARENT REPO ===
 PARENT_BRANCH?= $(shell bash $(MAKE_GADGETS_PATH)/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
 PARENT_SHORT_HASH?=$(shell git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
-PARENT_TAG:=${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+
+# === DETERMINE IF PARENT IS ADORE CLI REPO ===
+# Check if we're running from within the adore_cli repo itself
+PARENT_IS_ADORE_CLI:=$(shell if [ "$(shell pwd)" = "${ADORE_CLI_MAKEFILE_PATH}" ]; then echo "true"; else echo "false"; fi)
 
 # === DOCKER IMAGE AND CONTAINER CONFIGURATION ===
-# Three-layer architecture with user-agnostic core
-ADORE_CLI_SYSTEM_TAG:=${BRANCH}_${SHORT_HASH}_${ARCH}
-ADORE_CLI_SYSTEM_IMAGE:=adore_cli_system:${ADORE_CLI_SYSTEM_TAG}
+# Three-layer architecture with new naming convention
 
-ADORE_CLI_CORE_TAG:=${BRANCH}_${SHORT_HASH}_${ARCH}
+# Layer 1: Base foundation layer
+ADORE_CLI_BASE_TAG:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+ADORE_CLI_BASE_IMAGE:=adore_cli_base:${ADORE_CLI_BASE_TAG}
+
+# Layer 2: Core environment layer  
+ADORE_CLI_CORE_TAG:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
 ADORE_CLI_CORE_IMAGE:=adore_cli_core:${ADORE_CLI_CORE_TAG}
 
-ADORE_CLI_USER_TAG:=${BRANCH}_${SHORT_HASH}_${ARCH}_${USER}
-ADORE_CLI_USER_IMAGE:=adore_cli_user:${ADORE_CLI_USER_TAG}
+# Layer 3: User customization layer
+ifeq ($(PARENT_IS_ADORE_CLI),true)
+    # If parent is adore_cli repo, exclude parent info from tag
+    ADORE_CLI_TAG:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+else
+    # If parent is different repo, include parent info in tag
+    ADORE_CLI_TAG:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+endif
 
-ADORE_CLI_TAG:=${ADORE_CLI_CORE_TAG}_${PARENT_TAG}_${USER}
 ADORE_CLI_IMAGE:=adore_cli:${ADORE_CLI_TAG}
 ADORE_CLI_CONTAINER_NAME:=adore_cli_${ADORE_CLI_TAG}
 
@@ -66,8 +98,8 @@ GID := $(shell id -g)
 ADORE_TAG ?= $(ADORE_CLI_TAG)
 
 # === TAG HISTORY CONFIGURATION ===
-ADORE_CLI_TAG_HISTORY_FILE:=${SOURCE_DIRECTORY}/.log/adore_cli_tag_history
-ADORE_CLI_TEMP_DIR:=${SOURCE_DIRECTORY}/.log/temp
+ADORE_CLI_TAG_HISTORY_FILE:=${SOURCE_DIRECTORY}/.log/.adore_cli/adore_cli_tag_history
+ADORE_CLI_TEMP_DIR:=${SOURCE_DIRECTORY}/.log/.adore_cli/temp
 ADORE_CLI_HISTORY_VARS:=${ADORE_CLI_TEMP_DIR}/adore_cli_history_vars
 ADORE_CLI_CHOICE_VARS:=${ADORE_CLI_TEMP_DIR}/adore_cli_choice_vars
 ADORE_CLI_EFFECTIVE_VARS:=${ADORE_CLI_TEMP_DIR}/adore_cli_effective_vars
@@ -80,7 +112,7 @@ include ${MAKE_GADGETS_PATH}/docker/docker-tools.mk
 $(shell mkdir -p "${ADORE_CLI_MAKEFILE_PATH}/.ccache")
 $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.zsh_history")
 $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.bash_history")
-$(shell mkdir -p "${SOURCE_DIRECTORY}/.log")
+$(shell mkdir -p "${SOURCE_DIRECTORY}/.log/.adore_cli")
 $(shell mkdir -p "${ADORE_CLI_TEMP_DIR}")
 
 # === HELPER FUNCTIONS ===
@@ -88,17 +120,48 @@ define cleanup_temp_files
 	@rm -f "${ADORE_CLI_HISTORY_VARS}" "${ADORE_CLI_CHOICE_VARS}" "${ADORE_CLI_EFFECTIVE_VARS}"
 endef
 
-
 .PHONY: help_cli
 help_cli: ## Show ADORe CLI help 
 	@echo "=== ADORe CLI Help ==="
+	@echo "=== ADORe CLI Multi-Layer Build Process ==="
+	@echo "Building ADORe CLI with three-layer architecture..."
+	@echo "Target architecture: ${ARCH}"
+	@echo "ADORe CLI branch: ${ADORE_CLI_BRANCH} (${ADORE_CLI_SHORT_HASH})"
+	@echo "Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
+	@echo "User: ${USER} (UID: ${UID}, GID: ${GID})"
+	@echo ""
+	@echo "Build strategy:"
+	@echo "  1. Base layer:  Try registry pull → Use cache → Build locally"
+	@echo "  2. Core layer:  Try registry pull → Use cache → Build locally"
+	@echo "  3. User layer:  Use cache → Build locally (never pulled)"
+	@echo ""
+	@echo "=== FORCE REBUILD OPTIONS (if needed) ==="
+	@echo "If build fails or you need to rebuild without cache:"
+	@echo "  Complete rebuild:     make clean && make build"
+	@echo "  Force all layers:     make rebuild_force"
+	@echo "  From base layer:      make rebuild_from_layer LAYER=base"
+	@echo "  From core layer:      make rebuild_from_layer LAYER=core"
+	@echo "  User layer only:      make rebuild_from_layer LAYER=user"
+	@echo "  Individual layers:    make build_base_layer"
+	@echo "                        make build_core_layer"
+	@echo "                        make build_user_layer"
+	@echo ""
+	@echo "=== TROUBLESHOOTING ==="
+	@echo "If you encounter issues:"
+	@echo "  1. Check what was built:        make build_status"
+	@echo "  2. Force rebuild problem layer: make rebuild_from_layer LAYER=<base|core|user>"
+	@echo "  3. Complete clean rebuild:      make clean && make build"
+	@echo "  4. Show configuration:          make adore_cli_info"
+	@echo "  5. Debug individual layer:      make build_<base|core|user>_layer"
+	@echo "  6. Check registry status:       make registry_status"
+	@echo ""
 	@echo "=== Main User Targets ==="
 	@echo "  build              Build complete ADORe CLI environment (recommended)"
 	@echo "  cli                Start/attach to ADORe CLI (auto-builds ADORe CLI if needed, does not build nodes, libraries or vendor libraries)"
 	@echo "  clean              Clean all images and build artifacts"
 	@echo "  test               Run test suite"
 	@echo "  help_cli           Show this help message"
-	@echo "  info               Show current configuration"
+	@echo "  adore_cli_info     Show current configuration"
 	@echo "  build_status       Show status of all build layers"
 	@echo ""
 	@echo "=== Registry Targets ==="
@@ -151,7 +214,6 @@ check_cross_compile_deps: check_docker_version
 # - Creates log directory if needed
 # - Parses stored tag/container/image information
 # - Writes parsed values to temp file for subsequent targets
-# Target: _cli_read_history
 .PHONY: _cli_read_history
 _cli_read_history:
 	@mkdir -p "${ADORE_CLI_TEMP_DIR}"
@@ -316,99 +378,148 @@ adore_cli_up: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardow
 stop_adore_cli: docker_host_context_check adore_cli_teardown ## Stop adore_cli docker context if it is running
 
 # === BUILD TARGETS ===
-
-# Target: _build_adore_cli_core  
-# Description: Internal target - smart multi-layer core build
+# Target: _build_adore_cli_layers
+# Description: Internal target - smart multi-layer build with intelligent caching
 # - Checks for existing layers and builds only what's missing
-# - Maintains proper build order: system -> core -> user
-# - Uses efficient caching and incremental building
+# - Maintains proper build order: base -> core -> user
+# - Uses efficient caching and incremental building for fast rebuilds
+# - Attempts to pull base and core layers from registry before building locally
 # - Called automatically by main build target
-.PHONY: _build_adore_cli_core
-_build_adore_cli_core: check_cross_compile_deps
-	@echo "=== ADORe CLI Core Build Process ==="
-	@echo "Building ADORe CLI core with user-agnostic layers..."
-	@echo "Checking layer dependencies..."
-	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_system_base
-	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_core_environment  
-	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_user_layer
-	@echo "=== Core build process complete ==="
+#
+# LAYER ARCHITECTURE:
+# 1. Base Foundation (adore_cli_base): OS + ROS2 + fundamental tools
+#    - Tag: ${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+#    - User-agnostic, highly cacheable, shared across all users
+#    - Build time: ~10-15 minutes from scratch, <1 minute if pulled from registry
+#
+# 2. Core Environment (adore_cli_core): All discovered requirements + development tools
+#    - Tag: ${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+#    - User-agnostic, includes all project requirements
+#    - Build time: ~5-10 minutes from base layer, <1 minute if pulled from registry
+#
+# 3. User Layer (adore_cli): User account + .deb packages + final customization
+#    - Tag: ${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+#    - User-specific, cannot be shared between users, always built locally
+#    - Build time: ~1-2 minutes from core layer
+.PHONY: _build_adore_cli_layers
+_build_adore_cli_layers: check_cross_compile_deps
+	@echo "=== ADORe CLI Multi-Layer Build Process ==="
+	@echo "Building ADORe CLI with three-layer architecture..."
+	@echo "Target architecture: ${ARCH}"
+	@echo "ADORe CLI branch: ${ADORE_CLI_BRANCH} (${ADORE_CLI_SHORT_HASH})"
+	@echo "Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
+	@echo "User: ${USER} (UID: ${UID}, GID: ${GID})"
+	@echo ""
+	@echo "Build strategy:"
+	@echo "  1. Base layer:  Try registry pull → Use cache → Build locally"
+	@echo "  2. Core layer:  Try registry pull → Use cache → Build locally"
+	@echo "  3. User layer:  Use cache → Build locally (never pulled)"
+	@echo ""
+	@echo "Starting build process..."
+	@echo "=========================="
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_base
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_core
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_user
+	@echo "=========================="
+	@echo "=== Multi-layer build process complete ==="
+	@echo "Final image: ${ADORE_CLI_IMAGE}"
+	@echo ""
+	@echo "=== FORCE REBUILD OPTIONS (if needed) ==="
+	@echo "If build fails or you need to rebuild without cache:"
+	@echo "  Complete rebuild:     make clean && make build"
+	@echo "  Force all layers:     make rebuild_force"
+	@echo "  From base layer:      make rebuild_from_layer LAYER=base"
+	@echo "  From core layer:      make rebuild_from_layer LAYER=core"
+	@echo "  User layer only:      make rebuild_from_layer LAYER=user"
+	@echo "  Individual layers:    make build_base_layer"
+	@echo "                        make build_core_layer"
+	@echo "                        make build_user_layer"
+	@echo ""
+	@echo "=== TROUBLESHOOTING ==="
+	@echo "If you encounter issues:"
+	@echo "  1. Check what was built:        make build_status"
+	@echo "  2. Force rebuild problem layer: make rebuild_from_layer LAYER=<base|core|user>"
+	@echo "  3. Complete clean rebuild:      make clean && make build"
+	@echo "  4. Show configuration:          make adore_cli_info"
+	@echo "  5. Debug individual layer:      make build_<base|core|user>_layer"
+	@echo "  6. Check registry status:       make registry_status"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  Start development environment: make cli"
+	@echo "  View all ADOREe CLI specific  targets:    make help_cli"
 
-.PHONY: _check_and_build_user_layer
-_check_and_build_user_layer:
-	@if ! docker image inspect ${ADORE_CLI_USER_IMAGE} >/dev/null 2>&1; then \
-	    echo "Building user customization layer: ${ADORE_CLI_USER_IMAGE}"; \
-	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user_layer; \
-	else \
-	    echo "✓ User customization layer exists: ${ADORE_CLI_USER_IMAGE}"; \
-	fi
+.PHONY: build_adore_cli
+build_adore_cli: _build_adore_cli_layers ## Build The ADORe CLI Docker Context
 
 # === INTERNAL BUILD TARGETS ===
 # These targets exist for advanced use cases, CI/CD, and debugging
 
-# Target: _build_system_base
-# Description: Internal - builds system foundation layer only
-.PHONY: _build_system_base
-_build_system_base: check_cross_compile_deps
+# Target: _build_base_layer
+# Description: Internal - builds base foundation layer only
+.PHONY: _build_base_layer
+_build_base_layer: check_cross_compile_deps
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
-	    echo "Building system base (cross-compile): ${ADORE_CLI_SYSTEM_IMAGE}"; \
+	    echo "Building base layer (cross-compile): ${ADORE_CLI_BASE_IMAGE}"; \
 	    docker buildx build \
 	        --builder=default \
 	        --platform=$(DOCKER_PLATFORM) \
-	        --target=system-base \
-	        -t ${ADORE_CLI_SYSTEM_IMAGE} \
+	        --target=adore_cli_base \
+	        -t ${ADORE_CLI_BASE_IMAGE} \
 	        --build-arg ROS_DISTRO=${ROS_DISTRO} \
 	        --build-arg OS_CODE_NAME=${OS_CODE_NAME} \
-	        --build-arg BRANCH=${BRANCH} \
-	        --build-arg SHORT_HASH=${SHORT_HASH} \
+	        --build-arg BRANCH=${ADORE_CLI_BRANCH} \
+	        --build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
 	        --build-arg ARCH=${ARCH} \
-	        -f ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core \
-	        ${ADORE_CLI_MAKEFILE_PATH} \
+	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_base/Dockerfile.adore_cli_base \
+	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_base \
 	        --load; \
 	else \
-	    echo "Building system base (native): ${ADORE_CLI_SYSTEM_IMAGE}"; \
+	    echo "Building base layer (native): ${ADORE_CLI_BASE_IMAGE}"; \
 	    docker build --network host \
-	        --target=system-base \
-	        -t ${ADORE_CLI_SYSTEM_IMAGE} \
+	        --target=adore_cli_base \
+	        -t ${ADORE_CLI_BASE_IMAGE} \
 	        --build-arg ROS_DISTRO=${ROS_DISTRO} \
 	        --build-arg OS_CODE_NAME=${OS_CODE_NAME} \
-	        --build-arg BRANCH=${BRANCH} \
-	        --build-arg SHORT_HASH=${SHORT_HASH} \
+	        --build-arg BRANCH=${ADORE_CLI_BRANCH} \
+	        --build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
 	        --build-arg ARCH=${ARCH} \
-	        -f ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core \
-	        ${ADORE_CLI_MAKEFILE_PATH}; \
+	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_base/Dockerfile.adore_cli_base \
+	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_base; \
 	fi
 
-# Target: _build_core_environment
-# Description: Internal - builds core ROS2 environment layer only
-.PHONY: _build_core_environment  
-_build_core_environment: check_cross_compile_deps
+# Target: _build_core_layer
+# Description: Internal - builds core environment layer only
+.PHONY: _build_core_layer
+_build_core_layer: check_cross_compile_deps
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
-	    echo "Building core environment (cross-compile): ${ADORE_CLI_CORE_IMAGE}"; \
+	    echo "Building core layer (cross-compile): ${ADORE_CLI_CORE_IMAGE}"; \
 	    docker buildx build \
 	        --builder=default \
 	        --platform=$(DOCKER_PLATFORM) \
 	        --target=adore_cli_core \
 	        -t ${ADORE_CLI_CORE_IMAGE} \
+	        --build-arg ADORE_CLI_BASE_IMAGE=${ADORE_CLI_BASE_IMAGE} \
 	        --build-arg ROS_DISTRO=${ROS_DISTRO} \
 	        --build-arg OS_CODE_NAME=${OS_CODE_NAME} \
-	        --build-arg BRANCH=${BRANCH} \
-	        --build-arg SHORT_HASH=${SHORT_HASH} \
+	        --build-arg BRANCH=${ADORE_CLI_BRANCH} \
+	        --build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
 	        --build-arg ARCH=${ARCH} \
-	        -f ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core \
-	        ${ADORE_CLI_MAKEFILE_PATH} \
+	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core/Dockerfile.adore_cli_core \
+	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core \
 	        --load; \
 	else \
-	    echo "Building core environment (native): ${ADORE_CLI_CORE_IMAGE}"; \
+	    echo "Building core layer (native): ${ADORE_CLI_CORE_IMAGE}"; \
 	    docker build --network host \
 	        --target=adore_cli_core \
 	        -t ${ADORE_CLI_CORE_IMAGE} \
+	        --build-arg ADORE_CLI_BASE_IMAGE=${ADORE_CLI_BASE_IMAGE} \
 	        --build-arg ROS_DISTRO=${ROS_DISTRO} \
 	        --build-arg OS_CODE_NAME=${OS_CODE_NAME} \
-	        --build-arg BRANCH=${BRANCH} \
-	        --build-arg SHORT_HASH=${SHORT_HASH} \
+	        --build-arg BRANCH=${ADORE_CLI_BRANCH} \
+	        --build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
 	        --build-arg ARCH=${ARCH} \
-	        -f ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core \
-	        ${ADORE_CLI_MAKEFILE_PATH}; \
+	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core/Dockerfile.adore_cli_core \
+	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core; \
 	fi
 
 # Target: _build_user_layer
@@ -416,40 +527,46 @@ _build_core_environment: check_cross_compile_deps
 .PHONY: _build_user_layer
 _build_user_layer: check_cross_compile_deps
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
-	    echo "Building user layer (cross-compile): ${ADORE_CLI_USER_IMAGE}"; \
+	    echo "Building user layer (cross-compile): ${ADORE_CLI_IMAGE}"; \
 	    docker buildx build \
 	        --builder=default \
 	        --platform=$(DOCKER_PLATFORM) \
-	        --target=adore_cli_user \
-	        -t ${ADORE_CLI_USER_IMAGE} \
+	        --target=adore_cli \
+	        -t ${ADORE_CLI_IMAGE} \
+	        --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
 	        --build-arg ROS_DISTRO=${ROS_DISTRO} \
 	        --build-arg OS_CODE_NAME=${OS_CODE_NAME} \
-	        --build-arg BRANCH=${BRANCH} \
-	        --build-arg SHORT_HASH=${SHORT_HASH} \
+	        --build-arg BRANCH=${ADORE_CLI_BRANCH} \
+	        --build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
+	        --build-arg PARENT_BRANCH=${PARENT_BRANCH} \
+	        --build-arg PARENT_SHORT_HASH=${PARENT_SHORT_HASH} \
 	        --build-arg ARCH=${ARCH} \
 	        --build-arg USER=${USER} \
 	        --build-arg UID=${UID} \
 	        --build-arg GID=${GID} \
-	        --build-arg HOSTNAME=${HOSTNAME:-ADORe-CLI} \
-	        -f ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core \
-	        ${ADORE_CLI_MAKEFILE_PATH} \
+	        --build-arg HOSTNAME=${HOSTNAME} \
+	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile.adore_cli \
+	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli \
 	        --load; \
 	else \
-	    echo "Building user layer (native): ${ADORE_CLI_USER_IMAGE}"; \
+	    echo "Building user layer (native): ${ADORE_CLI_IMAGE}"; \
 	    docker build --network host \
-	        --target=adore_cli_user \
-	        -t ${ADORE_CLI_USER_IMAGE} \
+	        --target=adore_cli \
+	        -t ${ADORE_CLI_IMAGE} \
+	        --build-arg ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
 	        --build-arg ROS_DISTRO=${ROS_DISTRO} \
 	        --build-arg OS_CODE_NAME=${OS_CODE_NAME} \
-	        --build-arg BRANCH=${BRANCH} \
-	        --build-arg SHORT_HASH=${SHORT_HASH} \
+	        --build-arg BRANCH=${ADORE_CLI_BRANCH} \
+	        --build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
+	        --build-arg PARENT_BRANCH=${PARENT_BRANCH} \
+	        --build-arg PARENT_SHORT_HASH=${PARENT_SHORT_HASH} \
 	        --build-arg ARCH=${ARCH} \
 	        --build-arg USER=${USER} \
 	        --build-arg UID=${UID} \
 	        --build-arg GID=${GID} \
-	        --build-arg HOSTNAME=${HOSTNAME:-ADORe-CLI} \
-	        -f ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core \
-	        ${ADORE_CLI_MAKEFILE_PATH}; \
+	        --build-arg HOSTNAME=${HOSTNAME} \
+	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile.adore_cli \
+	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli; \
 	fi
 
 # Target: build_fast_adore_cli
@@ -461,12 +578,8 @@ _build_user_layer: check_cross_compile_deps
 build_fast_adore_cli:
 	@echo "Checking required images..."
 	@NEED_BUILD=false; \
-	if ! docker image inspect ${ADORE_CLI_USER_IMAGE} >/dev/null 2>&1; then \
-	    echo "User image missing: ${ADORE_CLI_USER_IMAGE}"; \
-	    NEED_BUILD=true; \
-	fi; \
 	if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
-	    echo "Runtime image missing: ${ADORE_CLI_IMAGE}"; \
+	    echo "User image missing: ${ADORE_CLI_IMAGE}"; \
 	    NEED_BUILD=true; \
 	fi; \
 	if [ "$$NEED_BUILD" = "true" ]; then \
@@ -476,31 +589,25 @@ build_fast_adore_cli:
 	    echo "✓ All required images exist"; \
 	fi
 
-.PHONY: build_adore_cli_core
-build_adore_cli_core: clean_adore_cli ## Builds the ADORe CLI core docker context/image
+.PHONY: build_adore_cli_layers
+build_adore_cli_layers: clean_adore_cli ## Builds the ADORe CLI multi-layer docker context/images
 	@rm -f "${ADORE_CLI_TAG_HISTORY_FILE}"
-	cd "${ADORE_CLI_MAKEFILE_PATH}" && make _build_adore_cli_core 
-
-.PHONY: build_adore_cli
-build_adore_cli: ## Builds the ADORe CLI runtime docker context/image
-	@rm -f "${ADORE_CLI_TAG_HISTORY_FILE}"
-	cd "${ADORE_CLI_MAKEFILE_PATH}/adore_cli" && make build 
+	cd "${ADORE_CLI_MAKEFILE_PATH}" && make _build_adore_cli_layers 
 
 .PHONY: clean_adore_cli 
 clean_adore_cli: ## Clean adore_cli docker context 
 	@rm -f "${ADORE_CLI_TAG_HISTORY_FILE}"
 	$(call cleanup_temp_files)
 	cd "${ADORE_CLI_MAKEFILE_PATH}" && make clean
-	cd "${ADORE_CLI_MAKEFILE_PATH}/adore_cli" && make clean
 
 # === ADVANCED BUILD TARGETS ===
 # These targets are available for power users, CI/CD, and debugging
 
-.PHONY: build_system_base
-build_system_base: _build_system_base ## Advanced: Build system base layer only
+.PHONY: build_base_layer
+build_base_layer: _build_base_layer ## Advanced: Build base layer only
 
-.PHONY: build_core_environment  
-build_core_environment: _build_core_environment ## Advanced: Build core environment layer only
+.PHONY: build_core_layer
+build_core_layer: _build_core_layer ## Advanced: Build core layer only
 
 .PHONY: build_user_layer
 build_user_layer: _build_user_layer ## Advanced: Build user layer only
@@ -508,34 +615,30 @@ build_user_layer: _build_user_layer ## Advanced: Build user layer only
 .PHONY: rebuild_force
 rebuild_force: ## Advanced: Force rebuild all layers (ignore existing images)
 	@echo "Force rebuilding all layers..."
-	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_system_base
-	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_environment
+	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_base_layer
+	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_layer
 	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user_layer
-	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk build_adore_cli
 
 .PHONY: rebuild_from_layer
-rebuild_from_layer: ## Advanced: Rebuild from specific layer. Usage: make rebuild_from_layer LAYER=core
+rebuild_from_layer: ## Advanced: Rebuild from specific layer. Usage: make rebuild_from_layer LAYER=base|core|user
 	@case "$(LAYER)" in \
-	    system) \
-	        echo "Rebuilding from system layer..."; \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_system_base; \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_environment; \
+	    base) \
+	        echo "Rebuilding from base layer..."; \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_base_layer; \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_layer; \
 	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user_layer; \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk build_adore_cli; \
 	        ;; \
 	    core) \
 	        echo "Rebuilding from core layer..."; \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_environment; \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_layer; \
 	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user_layer; \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk build_adore_cli; \
 	        ;; \
 	    user) \
 	        echo "Rebuilding from user layer..."; \
 	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user_layer; \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk build_adore_cli; \
 	        ;; \
 	    *) \
-	        echo "Usage: make rebuild_from_layer LAYER=system|core|user"; \
+	        echo "Usage: make rebuild_from_layer LAYER=base|core|user"; \
 	        exit 1; \
 	        ;; \
 	esac
@@ -551,7 +654,7 @@ rebuild_from_layer: ## Advanced: Rebuild from specific layer. Usage: make rebuil
 .PHONY: adore_cli_setup
 adore_cli_setup: build_fast_adore_cli 
 	@echo "Running adore_cli setup... SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
-	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.log
+	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.log/.adore_cli
 	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.ccache
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.bash_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history
@@ -611,50 +714,75 @@ branch_adore_cli: ## Returns the current docker safe/sanitized branch for adore_
 
 .PHONY: image_adore_cli
 image_adore_cli: ## Returns the current docker image name for adore_cli
-	@echo "${ADORE_CLI_USER_IMAGE}"
+	@echo "${ADORE_CLI_IMAGE}"
 
 .PHONY: images_adore_cli
 images_adore_cli: ## Returns all docker images for adore_cli
-	@echo "${ADORE_CLI_SYSTEM_IMAGE}"
+	@echo "${ADORE_CLI_BASE_IMAGE}"
 	@echo "${ADORE_CLI_CORE_IMAGE}"
-	@echo "${ADORE_CLI_USER_IMAGE}"
 	@echo "${ADORE_CLI_IMAGE}"
 
 .PHONY: container_name_adore_cli
 container_name_adore_cli: ## Returns the container name for the adore_cli
 	@echo "${ADORE_CLI_CONTAINER_NAME}"
+.PHONY: adore_cli_info
+adore_cli_info: ## Show configuration information for ADORe CLI
+	@echo "=== ADORe CLI Configuration ==="
+	@echo "ADORE_CLI_MAKEFILE_PATH: ${ADORE_CLI_MAKEFILE_PATH}"
+	@echo "ROOT_DIR: ${ROOT_DIR}"
+	@echo "SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
+	@echo "VENDOR_PATH: ${VENDOR_PATH}"
+	@echo "ROS_DISTRO: ${ROS_DISTRO}"
+	@echo "OS_CODE_NAME: ${OS_CODE_NAME}"
+	@echo "ARCH: ${ARCH}"
+	@echo "DOCKER_PLATFORM: ${DOCKER_PLATFORM}"
+	@echo "CROSS_COMPILE: ${CROSS_COMPILE}"
+	@echo "USER: ${USER}"
+	@echo "UID: ${UID}"
+	@echo "GID: ${GID}"
+	@echo "=== Docker Images ==="
+	@echo "Base Foundation: ${ADORE_CLI_BASE_IMAGE}"
+	@echo "Core Environment: ${ADORE_CLI_CORE_IMAGE}"
+	@echo "User Layer: ${ADORE_CLI_IMAGE}"
+	@echo "Container Name: ${ADORE_CLI_CONTAINER_NAME}"
+	@echo "=== Build Configuration ==="
+	@echo "DOCKER_BUILDKIT: ${DOCKER_BUILDKIT}"
+	@echo "ADORe CLI Branch: ${ADORE_CLI_BRANCH}"
+	@echo "ADORe CLI Hash: ${ADORE_CLI_SHORT_HASH}"
+	@echo "Parent Branch: ${PARENT_BRANCH}"
+	@echo "Parent Hash: ${PARENT_SHORT_HASH}"
+	@echo "Parent is ADORe CLI: ${PARENT_IS_ADORE_CLI}"
+	@echo "=== Paths Check ==="
+	@echo "Called from: $(shell pwd)"
+	@echo "Vendor exists: $(shell [ -d '${VENDOR_PATH}' ] && echo 'yes' || echo 'no')"
+	@echo "Source is adore_cli: $(shell [ '${SOURCE_DIRECTORY}' = '${ADORE_CLI_MAKEFILE_PATH}' ] && echo 'yes' || echo 'no')"
 
 .PHONY: build_status
 build_status: ## Show status of all build layers
 	@echo "=== ADORe CLI Build Status ==="
 	@printf "%-20s %-60s %s\n" "Layer" "Image" "Status"
 	@printf "%-20s %-60s %s\n" "----" "----" "----"
-	@if docker image inspect ${ADORE_CLI_SYSTEM_IMAGE} >/dev/null 2>&1; then \
-	    printf "%-20s %-60s %s\n" "System Base" "${ADORE_CLI_SYSTEM_IMAGE}" "✓ EXISTS"; \
+	@if docker image inspect ${ADORE_CLI_BASE_IMAGE} >/dev/null 2>&1; then \
+	    printf "%-20s %-60s %s\n" "Base Foundation" "${ADORE_CLI_BASE_IMAGE}" "✓ EXISTS"; \
 	else \
-	    printf "%-20s %-60s %s\n" "System Base" "${ADORE_CLI_SYSTEM_IMAGE}" "✗ MISSING"; \
+	    printf "%-20s %-60s %s\n" "Base Foundation" "${ADORE_CLI_BASE_IMAGE}" "✗ MISSING"; \
 	fi
 	@if docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
 	    printf "%-20s %-60s %s\n" "Core Environment" "${ADORE_CLI_CORE_IMAGE}" "✓ EXISTS"; \
 	else \
 	    printf "%-20s %-60s %s\n" "Core Environment" "${ADORE_CLI_CORE_IMAGE}" "✗ MISSING"; \
 	fi
-	@if docker image inspect ${ADORE_CLI_USER_IMAGE} >/dev/null 2>&1; then \
-	    printf "%-20s %-60s %s\n" "User Layer" "${ADORE_CLI_USER_IMAGE}" "✓ EXISTS"; \
-	else \
-	    printf "%-20s %-60s %s\n" "User Layer" "${ADORE_CLI_USER_IMAGE}" "✗ MISSING"; \
-	fi
 	@if docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
-	    printf "%-20s %-60s %s\n" "Runtime" "${ADORE_CLI_IMAGE}" "✓ EXISTS"; \
+	    printf "%-20s %-60s %s\n" "User Layer" "${ADORE_CLI_IMAGE}" "✓ EXISTS"; \
 	else \
-	    printf "%-20s %-60s %s\n" "Runtime" "${ADORE_CLI_IMAGE}" "✗ MISSING"; \
+	    printf "%-20s %-60s %s\n" "User Layer" "${ADORE_CLI_IMAGE}" "✗ MISSING"; \
 	fi
 
 # === REGISTRY INTEGRATION ===
 
 # Target: registry_status
-# Description: Shows status of base images in registry
-# - Checks if system base and core environment images exist in GitHub Container Registry
+# Description: Shows status of base and core images in registry
+# - Checks if base and core images exist in GitHub Container Registry
 # - Handles both CI environments (with GITHUB_REPOSITORY) and local development
 # - Provides helpful error messages when repository information is not available
 # - Uses docker manifest inspect to check image existence without downloading
@@ -677,8 +805,8 @@ registry_status:
 	fi; \
 	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
 	echo "Registry: $${REGISTRY_PREFIX}"; \
-	echo "Checking system base: $${REGISTRY_PREFIX}${ADORE_CLI_SYSTEM_IMAGE}"; \
-	if docker manifest inspect "$${REGISTRY_PREFIX}${ADORE_CLI_SYSTEM_IMAGE}" >/dev/null 2>&1; then \
+	echo "Checking base foundation: $${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}"; \
+	if docker manifest inspect "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}" >/dev/null 2>&1; then \
 	    echo "  ✓ Available in registry"; \
 	else \
 	    echo "  ✗ Not found in registry"; \
@@ -692,14 +820,14 @@ registry_status:
 
 # Target: try_pull_base_images
 # Description: Attempts to pull base and core images from GitHub Container Registry
-# - Tries to pull system base and core environment images from registry before building locally
+# - Tries to pull base and core images from registry before building locally
 # - Significantly speeds up builds when images are available in registry
 # - Falls back gracefully when registry images are not available
 # - Handles environment detection for both CI and local development
 # - Tags pulled images with local names for use by build system
 .PHONY: try_pull_base_images
 try_pull_base_images:
-	@echo "=== Attempting to pull base images from registry ==="
+	@echo "=== Attempting to pull base and core images from registry ==="
 	@# Determine GitHub repository
 	@if [ -n "${GITHUB_REPOSITORY}" ]; then \
 	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
@@ -712,12 +840,12 @@ try_pull_base_images:
 	fi; \
 	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
 	echo "Registry prefix: $${REGISTRY_PREFIX}"; \
-	echo "Trying to pull system base: $${REGISTRY_PREFIX}${ADORE_CLI_SYSTEM_IMAGE}"; \
-	if docker pull "$${REGISTRY_PREFIX}${ADORE_CLI_SYSTEM_IMAGE}" 2>/dev/null; then \
-	    echo "✓ Pulled system base from registry"; \
-	    docker tag "$${REGISTRY_PREFIX}${ADORE_CLI_SYSTEM_IMAGE}" "${ADORE_CLI_SYSTEM_IMAGE}"; \
+	echo "Trying to pull base foundation: $${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}"; \
+	if docker pull "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}" 2>/dev/null; then \
+	    echo "✓ Pulled base foundation from registry"; \
+	    docker tag "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}" "${ADORE_CLI_BASE_IMAGE}"; \
 	else \
-	    echo "✗ System base not found in registry"; \
+	    echo "✗ Base foundation not found in registry"; \
 	fi; \
 	echo "Trying to pull core environment: $${REGISTRY_PREFIX}${ADORE_CLI_CORE_IMAGE}"; \
 	if docker pull "$${REGISTRY_PREFIX}${ADORE_CLI_CORE_IMAGE}" 2>/dev/null; then \
@@ -729,7 +857,7 @@ try_pull_base_images:
 
 # Target: push_base_images
 # Description: Pushes base and core images to GitHub Container Registry
-# - Pushes only user-agnostic images (system base and core environment)
+# - Pushes only user-agnostic images (base and core)
 # - Tags images with proper registry prefix for GitHub Container Registry
 # - Skips user-specific images to avoid bloating registry storage
 # - Requires proper authentication and write permissions to registry
@@ -749,13 +877,13 @@ push_base_images:
 	fi; \
 	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
 	echo "Registry prefix: $${REGISTRY_PREFIX}"; \
-	if docker image inspect "${ADORE_CLI_SYSTEM_IMAGE}" >/dev/null 2>&1; then \
-	    echo "Tagging and pushing system base: ${ADORE_CLI_SYSTEM_IMAGE}"; \
-	    docker tag "${ADORE_CLI_SYSTEM_IMAGE}" "$${REGISTRY_PREFIX}${ADORE_CLI_SYSTEM_IMAGE}"; \
-	    docker push "$${REGISTRY_PREFIX}${ADORE_CLI_SYSTEM_IMAGE}"; \
-	    echo "✓ Pushed system base"; \
+	if docker image inspect "${ADORE_CLI_BASE_IMAGE}" >/dev/null 2>&1; then \
+	    echo "Tagging and pushing base foundation: ${ADORE_CLI_BASE_IMAGE}"; \
+	    docker tag "${ADORE_CLI_BASE_IMAGE}" "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}"; \
+	    docker push "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}"; \
+	    echo "✓ Pushed base foundation"; \
 	else \
-	    echo "✗ System base image not found locally"; \
+	    echo "✗ Base foundation image not found locally"; \
 	fi; \
 	if docker image inspect "${ADORE_CLI_CORE_IMAGE}" >/dev/null 2>&1; then \
 	    echo "Tagging and pushing core environment: ${ADORE_CLI_CORE_IMAGE}"; \
@@ -794,49 +922,62 @@ cleanup_registry_images:
 	echo "Protected commit hashes:$$KEEP_HASHES"; \
 	echo "Registry cleanup would preserve images with these hashes"
 
-# Updated build targets to use registry
-.PHONY: _check_and_build_system_base
-_check_and_build_system_base:
-	@if ! docker image inspect ${ADORE_CLI_SYSTEM_IMAGE} >/dev/null 2>&1; then \
-	    echo "System base image not found locally: ${ADORE_CLI_SYSTEM_IMAGE}"; \
+
+.PHONY: _check_and_build_base
+_check_and_build_base:
+	@if ! docker image inspect ${ADORE_CLI_BASE_IMAGE} >/dev/null 2>&1; then \
+	    echo "Base foundation image not found locally: ${ADORE_CLI_BASE_IMAGE}"; \
 	    echo "Attempting to pull from registry..."; \
-	    if ! make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _try_pull_system_base; then \
-	        echo "Building system base layer locally: ${ADORE_CLI_SYSTEM_IMAGE}"; \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_system_base; \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _try_pull_base; \
+	    if ! docker image inspect ${ADORE_CLI_BASE_IMAGE} >/dev/null 2>&1; then \
+	        echo "Building base foundation layer locally: ${ADORE_CLI_BASE_IMAGE}"; \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_base_layer; \
 	    fi; \
 	else \
-	    echo "✓ System base layer exists: ${ADORE_CLI_SYSTEM_IMAGE}"; \
+	    echo "✓ Base foundation layer exists (using cache): ${ADORE_CLI_BASE_IMAGE}"; \
 	fi
 
-.PHONY: _check_and_build_core_environment
-_check_and_build_core_environment:
+.PHONY: _check_and_build_core
+_check_and_build_core:
 	@if ! docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
+        cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core && make gather_requirements; \
 	    echo "Core environment image not found locally: ${ADORE_CLI_CORE_IMAGE}"; \
 	    echo "Attempting to pull from registry..."; \
-	    if ! make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _try_pull_core_environment; then \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _try_pull_core; \
+	    if ! docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
 	        echo "Building core environment layer locally: ${ADORE_CLI_CORE_IMAGE}"; \
-	        $(MAKE) --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_environment; \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_layer; \
 	    fi; \
 	else \
-	    echo "✓ Core environment layer exists: ${ADORE_CLI_CORE_IMAGE}"; \
+	    echo "✓ Core environment layer exists (using cache): ${ADORE_CLI_CORE_IMAGE}"; \
+	fi
+
+.PHONY: _check_and_build_user
+_check_and_build_user:
+	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
+        cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core && make gather_packages; \
+	    echo "Building user layer locally: ${ADORE_CLI_IMAGE}"; \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user_layer; \
+	else \
+	    echo "✓ User layer exists (using cache): ${ADORE_CLI_IMAGE}"; \
 	fi
 
 # Helper targets for individual image pulling
-.PHONY: _try_pull_system_base
-_try_pull_system_base:
+.PHONY: _try_pull_base
+_try_pull_base:
 	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY:-local/adore_cli}" | tr '[:upper:]' '[:lower:]'); \
-	REGISTRY_IMAGE="ghcr.io/$${GITHUB_REPO}/${ADORE_CLI_SYSTEM_IMAGE}"; \
+	REGISTRY_IMAGE="ghcr.io/$${GITHUB_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
 	if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \
-	    docker tag "$$REGISTRY_IMAGE" "${ADORE_CLI_SYSTEM_IMAGE}"; \
-	    echo "✓ Pulled system base from registry"; \
+	    docker tag "$$REGISTRY_IMAGE" "${ADORE_CLI_BASE_IMAGE}"; \
+	    echo "✓ Pulled base foundation from registry"; \
 	    exit 0; \
 	else \
-	    echo "✗ System base not available in registry"; \
+	    echo "✗ Base foundation not available in registry"; \
 	    exit 1; \
 	fi
 
-.PHONY: _try_pull_core_environment
-_try_pull_core_environment:
+.PHONY: _try_pull_core
+_try_pull_core:
 	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY:-local/adore_cli}" | tr '[:upper:]' '[:lower:]'); \
 	REGISTRY_IMAGE="ghcr.io/$${GITHUB_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
 	if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \

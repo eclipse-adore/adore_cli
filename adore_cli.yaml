@@ -1,14 +1,12 @@
 # ADORe CLI Docker Compose Services Configuration
 # 
-# This file defines the core ADORe CLI development environment services:
-# - adore_cli_core: Base ROS2 environment with minimal dependencies (DEPRECATED - kept for compatibility)
-# - adore_cli: Full development environment with tools and GUI support
+# This file defines the core ADORe CLI development environment service:
+# - adore_cli: Complete three-layer development environment with tools and GUI support
 #
 # The three-layer architecture provides:
-# - System base: OS + ROS2 foundation (user-agnostic, highly cacheable)
-# - Core environment: Complete ROS2 tools (user-agnostic, shareable)  
-# - User layer: User-specific customization (thin, fast to build)
-# - Runtime: Full development environment with discovered requirements
+# - Base foundation: OS + ROS2 foundation (user-agnostic, highly cacheable)
+# - Core environment: Complete ROS2 tools + all dependencies (user-agnostic, shareable)  
+# - User layer: User-specific customization + .deb packages (user-specific, thin layer)
 
 # === SHARED CONFIGURATION ANCHORS ===
 # These YAML anchors reduce duplication and ensure consistency
@@ -25,7 +23,7 @@ x-common-config: &common-config
 x-common-environment: &common-environment
   HOSTNAME: ${HOSTNAME:-ADORe-CLI}
   SOURCE_DIRECTORY: ${SOURCE_DIRECTORY:-.}
-  LOG_DIRECTORY: ${SOURCE_DIRECTORY:-/default/source}/.log/
+  LOG_DIRECTORY: ${SOURCE_DIRECTORY:-/default/source}/.log/.adore_cli/
   ROS_HOME: ${SOURCE_DIRECTORY}/.log/.ros
   HISTFILE: ${SOURCE_DIRECTORY}/.zsh_history
   FASTDDS_BUILTIN_TRANSPORTS: UDPv4
@@ -40,49 +38,17 @@ x-common-build-args: &common-build-args
   GID: ${GID:-1001}
   ROS_DISTRO: ${ROS_DISTRO:-jazzy}
   OS_CODE_NAME: ${OS_CODE_NAME:-noble}
-  BRANCH: ${BRANCH}
-  SHORT_HASH: ${SHORT_HASH}
+  BRANCH: ${ADORE_CLI_BRANCH}
+  SHORT_HASH: ${ADORE_CLI_SHORT_HASH}
+  PARENT_BRANCH: ${PARENT_BRANCH}
+  PARENT_SHORT_HASH: ${PARENT_SHORT_HASH}
   ARCH: ${ARCH}
 
 # === SERVICE DEFINITIONS ===
 
 services:
-  # === LEGACY CORE SERVICE ===
-  # DEPRECATED: Kept for backward compatibility only
-  # New builds use the three-layer architecture instead
-  adore_cli_core:
-    <<: *common-config
-    image: ${ADORE_CLI_USER_IMAGE}
-    container_name: ${ADORE_CLI_CONTAINER_NAME}
-    
-    # === ENVIRONMENT VARIABLES ===
-    environment:
-      <<: *common-environment
-      TEST_SCENARIOS: ${TEST_SCENARIOS:-baseline_test.launch}
-    
-    # === BUILD CONFIGURATION ===
-    # Note: This builds the user layer, not the legacy core
-    build:
-      context: ${ADORE_CLI_MAKEFILE_PATH}
-      network: host
-      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core
-      target: adore_cli_user
-      args:
-        <<: *common-build-args
-    
-    # === VOLUME MOUNTS ===
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .zsh_history:/home/${USER}/.zsh_history
-      - .zsh_history:/home/${USER}/.zsh_history.new
-      - ./:/tmp/adore
-      - ${SOURCE_DIRECTORY}:/tmp/adore
-      - ${SOURCE_DIRECTORY}:${SOURCE_DIRECTORY}
-      - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache
-      - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
-
-  # === FULL DEVELOPMENT SERVICE ===
-  # Complete development environment with GUI support and development tools
+  # === MAIN DEVELOPMENT SERVICE ===
+  # Complete three-layer development environment with GUI support and development tools
   # Used for: Interactive development, graphical applications, full feature set
   adore_cli:
     <<: *common-config
@@ -93,7 +59,7 @@ services:
     environment:
       <<: *common-environment
       ROS_DISTRO: ${ROS_DISTRO:-jazzy}
-      ADORE_SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}
+      SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}
       ADORE_CLI_WORKING_DIRECTORY: ${ADORE_CLI_WORKING_DIRECTORY}
       TEST_SCENARIOS: ${TEST_SCENARIOS:-baseline_test.launch}
       ADORE_CLI_IMAGE: ${ADORE_CLI_IMAGE}
@@ -102,13 +68,14 @@ services:
       DISPLAY: ${DISPLAY}
     
     # === BUILD CONFIGURATION ===
+    # This builds the complete three-layer stack when needed
     build:
       context: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli
       network: host
-      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile
+      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile.adore_cli
       args:
         <<: *common-build-args
-        ADORE_CLI_USER_IMAGE: ${ADORE_CLI_USER_IMAGE}
+        ADORE_CLI_CORE_IMAGE: ${ADORE_CLI_CORE_IMAGE}
     
     # === VOLUME MOUNTS ===
     volumes:
@@ -119,7 +86,7 @@ services:
       - ${SOURCE_DIRECTORY}:/tmp/adore
       - ${SOURCE_DIRECTORY}:${SOURCE_DIRECTORY}
       - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache
-      - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
+      - ${SOURCE_DIRECTORY}/.log/.adore_cli:/var/log/adore_cli
     
     # === NETWORK CONFIGURATION ===
     extra_hosts:
@@ -128,24 +95,19 @@ services:
 # === CONFIGURATION NOTES ===
 #
 # THREE-LAYER ARCHITECTURE:
-# 1. System Base (adore_cli_system): OS + ROS2 foundation
-#    - Tag: ${BRANCH}_${SHORT_HASH}_${ARCH}
+# 1. Base Foundation (adore_cli_base): OS + ROS2 foundation
+#    - Tag: ${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
 #    - User-agnostic, highly cacheable
 #    - Shared across all users and environments
 #
-# 2. Core Environment (adore_cli_core): Complete ROS2 environment  
-#    - Tag: ${BRANCH}_${SHORT_HASH}_${ARCH}
-#    - User-agnostic, includes all development tools
-#    - Shared across all users for same git commit
+# 2. Core Environment (adore_cli_core): Complete ROS2 environment + all dependencies
+#    - Tag: ${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+#    - User-agnostic, includes all discovered requirements
+#    - Shared across all users for same adore_cli commit
 #
-# 3. User Layer (adore_cli_user): User-specific customization
-#    - Tag: ${BRANCH}_${SHORT_HASH}_${ARCH}_${USER}
-#    - Thin layer with only user configuration
-#    - Fast to build, specific to each user
-#
-# 4. Runtime (adore_cli): Full development environment
-#    - Tag: Complex tag including parent project info
-#    - Includes all discovered requirements
+# 3. User Layer (adore_cli): User-specific customization + .deb packages
+#    - Tag: ${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+#    - User-specific with .deb packages and user account
 #    - Final development-ready image
 #
 # SECURITY CONSIDERATIONS:
@@ -162,7 +124,7 @@ services:
 # - Source code is mounted at multiple paths for flexibility
 # - Build cache (.ccache) persists between container rebuilds
 # - Shell history persists for better development experience
-# - Logs are accessible from both host and container
+# - Logs are accessible from both host and container in .log/.adore_cli/
 #
 # NETWORKING:
 # - Host networking mode simplifies ROS2 multi-machine communication
