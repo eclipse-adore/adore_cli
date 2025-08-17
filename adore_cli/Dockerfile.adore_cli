@@ -1,5 +1,5 @@
 ARG ADORE_CLI_CORE_IMAGE=adore_cli_core:latest
-FROM ${ADORE_CLI_CORE_IMAGE}
+FROM ${ADORE_CLI_CORE_IMAGE} AS adore_cli
 
 # Build arguments
 ARG ROS_DISTRO=jazzy
@@ -66,4 +66,8 @@ RUN echo "${USER} ALL = NOPASSWD : /usr/sbin/rsyslogd, /usr/bin/apt-get, /usr/bi
 WORKDIR /tmp/adore
 
 # Set user for subsequent operations
+COPY files/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 USER ${USER}
+WORKDIR /tmp/adore
+ENTRYPOINT ["/entrypoint.sh"]

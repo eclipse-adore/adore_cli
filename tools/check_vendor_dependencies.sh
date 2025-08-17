@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
-VENDOR_DEPENDENCY_DIRECTORY="$(realpath "${SCRIPT_DIRECTORY}/../adore_cli/.tmp")"
+
+# The vendor dependency directory should be in the SOURCE_DIRECTORY/.log/.adore_cli/packages
+# since that's where the build process places the package info
+VENDOR_DEPENDENCY_DIRECTORY="${SOURCE_DIRECTORY}/.log/.adore_cli/packages"
+
 check_vendor_dependencies() {
     if [[ -n "$TERM" && "$TERM" != "dumb" && "$TERM" != "unknown" ]]; then
         BOLD='\033[1m'
@@ -27,6 +31,8 @@ check_vendor_dependencies() {
         printf "    ${BOLD}${BLINK}${ORANGE}WARNING:${RESET} Vendor dependencies not found!\n" 
         printf "        This may result in missing dependencies when building nodes or libraries.\n"  
         printf "        Build the vendor libraries with 'make build' and try again.\n"
+    else
+        printf "    ✓ Found $deb_count vendor dependency packages\n"
     fi
 }
 check_vendor_dependencies

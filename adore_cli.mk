@@ -58,26 +58,21 @@ PARENT_BRANCH?= $(shell bash $(MAKE_GADGETS_PATH)/tools/branch_name.sh 2>/dev/nu
 PARENT_SHORT_HASH?=$(shell git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
 PARENT_IS_DIRTY:=$(shell cd ${SOURCE_DIRECTORY} && if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then echo "true"; else echo "false"; fi)
 
+# === REQUIREMENTS HASH GENERATION ===
+REQUIREMENTS_SHORT_HASH:=$(shell find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | xargs -r cat 2>/dev/null | sha256sum | cut -c1-7)
+
 # === MANIFEST PATHS ===
 REQUIREMENTS_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/requirements_manifest.sha256
 PACKAGES_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/packages_manifest.sha256
 LAST_REQUIREMENTS_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/last_requirements_manifest.sha256
 LAST_PACKAGES_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/last_packages_manifest.sha256
 
-# === DETERMINE IF PARENT IS ADORE CLI REPO ===
-# Check if we're running from within the adore_cli repo itself
-PARENT_IS_ADORE_CLI:=$(shell if [ "$(shell pwd)" = "${ADORE_CLI_MAKEFILE_PATH}" ]; then echo "true"; else echo "false"; fi)
-
 # === TAG STATE FILES ===
 BUILT_TAGS_FILE:=${SOURCE_DIRECTORY}/.log/.adore_cli/built_tags
 ADORE_CLI_TEMP_DIR:=${SOURCE_DIRECTORY}/.log/.adore_cli/temp
 
 # === CORE TAGGING LOGIC ===
-# Helper function to check if there are requirements file changes in git status
-REQUIREMENTS_FILES_CHANGED:=$(shell cd ${SOURCE_DIRECTORY} && git status --porcelain 2>/dev/null | grep -E '\.(system|pip3|ppa)$$' >/dev/null && echo "true" || echo "false")
-
-# === DOCKER IMAGE AND CONTAINER CONFIGURATION ===
-# Default clean tags
+# Base tags (always use adore_cli repo info)
 ADORE_CLI_BASE_TAG_CLEAN:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
 ifeq ($(ADORE_CLI_IS_DIRTY),true)
     ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}_dirty
@@ -85,23 +80,13 @@ else
     ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}
 endif
 
-# Core image tagging logic
-ADORE_CLI_CORE_TAG_CLEAN:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
-PRIMARY_CORE_EXISTS:=$(shell docker image inspect adore_cli_core:${ADORE_CLI_CORE_TAG_CLEAN} >/dev/null 2>&1 && echo "true" || echo "false")
-
-# Apply the specified core tagging logic
-ifeq ($(PRIMARY_CORE_EXISTS),false)
-    ifeq ($(PARENT_IS_DIRTY),true)
-        ADORE_CLI_CORE_TAG_DEFAULT:=${ADORE_CLI_CORE_TAG_CLEAN}_dirty
-    else
-        ADORE_CLI_CORE_TAG_DEFAULT:=${ADORE_CLI_CORE_TAG_CLEAN}
-    endif
+# Core image tagging according to requirements
+ifeq ($(PARENT_IS_ADORE_CLI),true)
+    # If invoked from adore_cli itself: adore_cli_core:<arch>_<branch name>_<short_hash>
+    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
 else
-    ifeq ($(REQUIREMENTS_FILES_CHANGED),true)
-        ADORE_CLI_CORE_TAG_DEFAULT:=${ADORE_CLI_CORE_TAG_CLEAN}_dirty
-    else
-        ADORE_CLI_CORE_TAG_DEFAULT:=${ADORE_CLI_CORE_TAG_CLEAN}
-    endif
+    # If invoked from parent: adore_cli_core:<arch>_<branch>_<hash>_<parent_branch>_<parent_hash>_rh<req_hash>
+    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_rh${REQUIREMENTS_SHORT_HASH}
 endif
 
 # User image tagging
@@ -231,36 +216,29 @@ _determine_actual_build_tags: _generate_requirements_manifest _generate_packages
 	@echo "Determining actual build tags based on requirements and package changes..."
 	@mkdir -p "${ADORE_CLI_TEMP_DIR}"
 	@echo "=== Tag Determination Logic ==="
-	@echo "Primary core image exists: ${PRIMARY_CORE_EXISTS}"
+	@echo "Parent is ADORe CLI: ${PARENT_IS_ADORE_CLI}"
 	@echo "Parent repo dirty: ${PARENT_IS_DIRTY}"
-	@echo "Requirements files changed in git: ${REQUIREMENTS_FILES_CHANGED}"
+	@echo "Requirements short hash: ${REQUIREMENTS_SHORT_HASH}"
 	@REQUIREMENTS_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_requirements_manifest_changed); \
 	PACKAGES_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_packages_manifest_changed); \
 	echo "Requirements manifest changed: $$REQUIREMENTS_CHANGED"; \
 	echo "Packages manifest changed: $$PACKAGES_CHANGED"; \
 	ACTUAL_BASE_TAG="${ADORE_CLI_BASE_TAG_DEFAULT}"; \
-	if [ "${PRIMARY_CORE_EXISTS}" = "false" ] && [ "${PARENT_IS_DIRTY}" = "true" ]; then \
-	    echo "→ No primary core image + parent dirty → using dirty core tag"; \
-	    ACTUAL_CORE_TAG="${ADORE_CLI_CORE_TAG_CLEAN}_dirty"; \
-	elif [ "${REQUIREMENTS_FILES_CHANGED}" = "true" ]; then \
-	    echo "→ Requirements files changed in git → using dirty core tag"; \
-	    ACTUAL_CORE_TAG="${ADORE_CLI_CORE_TAG_CLEAN}_dirty"; \
-	elif [ "$$REQUIREMENTS_CHANGED" = "true" ] && [ "${PARENT_IS_DIRTY}" = "true" ]; then \
-	    echo "→ Requirements manifest changed + parent dirty → using dirty core tag"; \
-	    ACTUAL_CORE_TAG="${ADORE_CLI_CORE_TAG_CLEAN}_dirty"; \
-	elif [ "$$REQUIREMENTS_CHANGED" = "true" ]; then \
-	    echo "→ Requirements manifest changed → using dirty core tag"; \
-	    ACTUAL_CORE_TAG="${ADORE_CLI_CORE_TAG_CLEAN}_dirty"; \
+	CORE_BASE_TAG="${ADORE_CLI_CORE_TAG_DEFAULT}"; \
+	if [ "$$REQUIREMENTS_CHANGED" = "true" ] || [ "${PARENT_IS_DIRTY}" = "true" ]; then \
+	    echo "→ Requirements changed or parent dirty → rebuilding core layer"; \
+	    ACTUAL_CORE_TAG="$${CORE_BASE_TAG}_dirty"; \
 	else \
 	    echo "→ No requirements changes → using clean core tag"; \
-	    ACTUAL_CORE_TAG="${ADORE_CLI_CORE_TAG_CLEAN}"; \
+	    ACTUAL_CORE_TAG="$$CORE_BASE_TAG"; \
 	fi; \
+	USER_BASE_TAG="${ADORE_CLI_USER_TAG_DEFAULT}"; \
 	if [ "$$PACKAGES_CHANGED" = "true" ]; then \
 	    echo "→ Packages changed → using dirty user tag"; \
-	    ACTUAL_USER_TAG="${ADORE_CLI_USER_TAG_DEFAULT}_dirty"; \
+	    ACTUAL_USER_TAG="$${USER_BASE_TAG}_dirty"; \
 	else \
 	    echo "→ No package changes → using clean user tag"; \
-	    ACTUAL_USER_TAG="${ADORE_CLI_USER_TAG_DEFAULT}"; \
+	    ACTUAL_USER_TAG="$$USER_BASE_TAG"; \
 	fi; \
 	echo "ACTUAL_BASE_TAG=$$ACTUAL_BASE_TAG" > "${ADORE_CLI_TEMP_DIR}/build_vars"; \
 	echo "ACTUAL_CORE_TAG=$$ACTUAL_CORE_TAG" >> "${ADORE_CLI_TEMP_DIR}/build_vars"; \
@@ -399,21 +377,62 @@ _cli_execute:
 	@source "${ADORE_CLI_EFFECTIVE_VARS}"; \
 	if [[ "$$(docker inspect -f '{{.State.Running}}' "$$EFFECTIVE_CONTAINER_NAME" 2>/dev/null)" == "true" ]]; then \
 	    echo "Attaching to existing container: $$EFFECTIVE_CONTAINER_NAME"; \
-	    docker exec -it "$$EFFECTIVE_CONTAINER_NAME" /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true; \
+	    echo "Type 'exit' to detach from container (container will continue running)"; \
+	    echo "Use 'make stop' to stop the container"; \
+	    echo ""; \
+	    docker exec -it "$$EFFECTIVE_CONTAINER_NAME" /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
+	    echo ""; \
+	    echo "Detached from container. Container is still running."; \
+	    echo "Use 'make cli' to reattach or 'make stop' to stop it."; \
 	else \
 	    echo "Starting new container with tag: $$EFFECTIVE_TAG"; \
 	    cd "${ADORE_CLI_MAKEFILE_PATH}" && \
 	    ADORE_CLI_TAG="$$EFFECTIVE_TAG" \
 	    ADORE_CLI_CONTAINER_NAME="$$EFFECTIVE_CONTAINER_NAME" \
 	    ADORE_CLI_IMAGE="$$EFFECTIVE_IMAGE" \
-	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_up; \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _start_and_attach_interactive; \
 	fi; \
 	rm -f "${ADORE_CLI_HISTORY_VARS}" "${ADORE_CLI_CHOICE_VARS}" "${ADORE_CLI_EFFECTIVE_VARS}"
+
+# Interactive flow - start container and attach, but don't teardown
+.PHONY: _start_and_attach_interactive
+_start_and_attach_interactive: adore_cli_setup adore_cli_start
+	@echo "Container started. Attaching to interactive session..."
+	@echo "Type 'exit' to detach from container (container will continue running)"
+	@echo "Use 'make cli' to reattach or 'make stop' to stop the container"
+	@echo ""
+	@docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"
+	@echo ""
+	@echo "Detached from container. Container is still running."
+	@echo "Use 'make cli' to reattach or 'make stop' to stop it."
 
 # === MAIN CLI TARGET ===
 
 .PHONY: cli 
-cli: docker_host_context_check _cli_check_tag_changes _cli_handle_choice _cli_execute ## Start ADORe CLI docker context or attach to it if it is already running
+cli: docker_host_context_check _determine_image_needs _cli_check_tag_changes _cli_handle_choice _cli_execute ## Start ADORe CLI docker context or attach to it if it is already running
+
+.PHONY: _determine_image_needs
+_determine_image_needs:
+	@echo "Checking if necessary images exist..."
+	@NEED_BUILD=false; \
+	if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
+	    echo "User image missing: ${ADORE_CLI_IMAGE}"; \
+	    NEED_BUILD=true; \
+	fi; \
+	if ! docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
+	    echo "Core image missing: ${ADORE_CLI_CORE_IMAGE}"; \
+	    NEED_BUILD=true; \
+	fi; \
+	if ! docker image inspect ${ADORE_CLI_BASE_IMAGE} >/dev/null 2>&1; then \
+	    echo "Base image missing: ${ADORE_CLI_BASE_IMAGE}"; \
+	    NEED_BUILD=true; \
+	fi; \
+	if [ "$$NEED_BUILD" = "true" ]; then \
+	    echo "Building missing images..."; \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers; \
+	else \
+	    echo "✓ All required images exist, starting CLI..."; \
+	fi
 
 # === LIFECYCLE TARGETS ===
 .PHONY: start
@@ -425,6 +444,7 @@ stop: stop_adore_cli ## Stop ADORe CLI docker compose context if it is running
 .PHONY: run
 run: adore_cli_setup adore_cli_start adore_cli_run adore_cli_teardown ## Execute a command in the ADORe CLI context `make run cmd="<command to execute>"` 
 
+# Non-interactive flow - for scripts and CI (includes teardown)
 .PHONY: adore_cli_up
 adore_cli_up: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardown 
 
@@ -442,6 +462,7 @@ _build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
 	@echo "ADORe CLI dirty: ${ADORE_CLI_IS_DIRTY}"
 	@echo "Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
 	@echo "Parent dirty: ${PARENT_IS_DIRTY}"
+	@echo "Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
 	@echo "User: ${USER} (UID: ${UID}, GID: ${GID})"
 	@echo ""
 	@echo "Build strategy:"
@@ -576,26 +597,6 @@ _build_user_layer: check_cross_compile_deps
 	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli; \
 	fi
 
-.PHONY: build_fast_adore_cli
-build_fast_adore_cli:
-	@echo "Checking required images..."
-	@NEED_BUILD=false; \
-	if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
-	    echo "User image missing: ${ADORE_CLI_IMAGE}"; \
-	    NEED_BUILD=true; \
-	fi; \
-	if [ "$$NEED_BUILD" = "true" ]; then \
-	    echo "Building missing images..."; \
-	    cd "${ADORE_CLI_MAKEFILE_PATH}" && make build; \
-	else \
-	    echo "✓ All required images exist"; \
-	fi
-
-.PHONY: build_adore_cli_layers
-build_adore_cli_layers: clean_adore_cli ## Builds the ADORe CLI multi-layer docker context/images
-	@rm -f "${ADORE_CLI_TAG_HISTORY_FILE}"
-	cd "${ADORE_CLI_MAKEFILE_PATH}" && make _build_adore_cli_layers 
-
 .PHONY: clean_adore_cli 
 clean_adore_cli: ## Clean adore_cli docker context 
 	@rm -f "${ADORE_CLI_TAG_HISTORY_FILE}"
@@ -658,7 +659,7 @@ _check_and_build_user:
 # === SETUP AND TEARDOWN ===
 
 .PHONY: adore_cli_setup
-adore_cli_setup: build_fast_adore_cli 
+adore_cli_setup: 
 	@echo "Running adore_cli setup... SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
 	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.log/.adore_cli
 	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.ccache
@@ -681,7 +682,6 @@ adore_cli_start:
 	@echo "  ADORE_CLI_CONTAINER_NAME: ${ADORE_CLI_CONTAINER_NAME}"
 	@echo "  Expected core image: ${ADORE_CLI_CORE_IMAGE}"
 	@echo ${ADORE_CLI_MAKEFILE_PATH}
-	@# Verify the expected image exists before starting
 	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
 	    echo "ERROR: Required user image not found: ${ADORE_CLI_IMAGE}"; \
 	    echo "Available images with similar names:"; \
@@ -689,7 +689,6 @@ adore_cli_start:
 	    echo "Please run 'make build' first to create all required images"; \
 	    exit 1; \
 	fi
-	@# Don't use docker-compose build, only use the pre-built image
 	cd ${ADORE_CLI_MAKEFILE_PATH} && \
 	docker compose  -f ${DOCKER_COMPOSE_FILE} up \
 	    --no-build \
@@ -719,6 +718,7 @@ test_ros2_installation:
 adore_cli_start_headless: adore_cli_setup
 	export DISPLAY_MODE=headless && make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_start 
 
+# Standard attach (used by adore_cli_up and run target) 
 .PHONY: adore_cli_attach
 adore_cli_attach:
 	@echo "Running adore_cli attach..."
@@ -772,9 +772,7 @@ adore_cli_info: ## Show configuration information for ADORe CLI
 	@echo "Parent Hash: ${PARENT_SHORT_HASH}"
 	@echo "Parent Dirty: ${PARENT_IS_DIRTY}"
 	@echo "Parent is ADORe CLI: ${PARENT_IS_ADORE_CLI}"
-	@echo "=== Core Tagging Logic ==="
-	@echo "Primary core exists: ${PRIMARY_CORE_EXISTS}"
-	@echo "Requirements files changed in git: ${REQUIREMENTS_FILES_CHANGED}"
+	@echo "Requirements Hash: ${REQUIREMENTS_SHORT_HASH}"
 	@echo "=== Built Tags Status ==="
 	@if [ -f "${BUILT_TAGS_FILE}" ]; then \
 	    echo "Built tags file exists: ${BUILT_TAGS_FILE}"; \
@@ -980,6 +978,7 @@ help_cli: ## Show ADORe CLI help
 	@echo "ADORe CLI dirty: ${ADORE_CLI_IS_DIRTY}"
 	@echo "Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
 	@echo "Parent dirty: ${PARENT_IS_DIRTY}"
+	@echo "Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
 	@echo "User: ${USER} (UID: ${UID}, GID: ${GID})"
 	@echo ""
 	@echo "Build strategy:"
