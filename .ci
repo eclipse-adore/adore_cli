@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
+SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-SUBMODULES_PATH=${SUBMODULES_PATH:-$(realpath .)}
-source "${SUBMODULES_PATH}/ci_teststand/ci_core.sh" 
-source "${SUBMODULES_PATH}/ci_teststand/ci_utils.sh" 
+source "${SCRIPT_DIRECTORY}/ci_teststand/ci_core.sh" 
+source "${SCRIPT_DIRECTORY}/ci_teststand/ci_utils.sh" 
 source ci.env
-source "${SUBMODULES_PATH}/ci_teststand/tests/common_tests.sh"
-source "${SUBMODULES_PATH}/ci_teststand/tests/docker_tests.sh"
-source "${SUBMODULES_PATH}/ci_teststand/tests/file_tests.sh"
+source "${SCRIPT_DIRECTORY}/ci_teststand/tests/common_tests.sh"
+source "${SCRIPT_DIRECTORY}/ci_teststand/tests/docker_tests.sh"
+source "${SCRIPT_DIRECTORY}/ci_teststand/tests/file_tests.sh"
 #source "${SUBMODULES_PATH}/ci_teststand/.static_checking_tests"
 source .tests 
 

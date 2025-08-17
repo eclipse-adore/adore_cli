@@ -3,19 +3,20 @@ name: CI_native_arm64
 
 on:
   push:
+    branches:
+      - 'ros2'
   pull_request:
-    branches: [ ros2 ]
+    branches:
+      - '**'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  GITHUB_REPOSITORY_LOWER: ${{ github.repository_owner }}
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   CI_native_arm64:
     runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Init
@@ -23,30 +24,17 @@ jobs:
           df -h
           sudo apt-get update
 
-      - name: Free up disk space
-        run: |
-          echo "Initial disk usage:"
-          df -h
-          echo "Removing unnecessary packages and files..."
-          
-          sudo rm -rf /opt/hostedtoolcache 2>/dev/null || true
-          sudo rm -rf /usr/local/lib/android 2>/dev/null || true
-          sudo rm -rf /opt/android 2>/dev/null || true
-          sudo rm -rf /usr/share/dotnet 2>/dev/null || true
-          sudo rm -rf /opt/ghc 2>/dev/null || true
-          sudo rm -rf /usr/local/.ghcup 2>/dev/null || true
-          
-          sudo apt-get remove -y '^aspnetcore-.*' '^dotnet-.*' '^llvm-.*' '^mysql-.*' '^php.*' azure-cli google-cloud-sdk hhvm google-chrome-stable firefox powershell mono-devel libgl1-mesa-dri 2>/dev/null || true
-          sudo apt-get autoremove -y 2>/dev/null || true
-          sudo apt-get clean 2>/dev/null || true
-          
-          docker image prune -af 2>/dev/null || true
-          
-          sudo swapoff -a 2>/dev/null || true
-          sudo rm -f /swapfile /mnt/swapfile 2>/dev/null || true
-          
-          echo "Disk usage after cleanup:"
-          df -h
+      - name: Maximize free space
+        id: maximize-space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Freespace Check
         run: |
@@ -55,68 +43,113 @@ jobs:
           free_space=$(df -h . | awk '{print $4}' | grep "G")
           free_space="${free_space%G}"
           if [ -z "$free_space" ]; then
-            echo "ERROR: free_space variable is empty or not set." >&2
-            exit 1
+              echo "ERROR: free_space variable is empty or not set." >&2
+              exit 1
           fi
           df -h
           echo "Free space (required): ${REQUIRED_FREE_SPACE} GB"
           echo "Free space (available): ${free_space} GB"
           if (( REQUIRED_FREE_SPACE > free_space )); then
-            echo "ERROR: Insufficient free space: ${free_space} GB available, ${REQUIRED_FREE_SPACE} GB required." >&2
-            exit 1
+              echo "ERROR: Insufficient free space: ${free_space} GB available, ${REQUIRED_FREE_SPACE} GB required." >&2
+              exit 1
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
         with:
           submodules: 'recursive'
-          fetch-depth: 0
-
-      - name: Set up environment variables
-        run: |
-          echo "GITHUB_REPOSITORY_LOWER=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-          echo "REGISTRY_PREFIX=ghcr.io/$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')/" >> $GITHUB_ENV
 
       - name: Install requirements
         run: |
           df -h
           sudo apt-get update
-          sudo apt-get install -y make
+          sudo apt-get install -y make curl jq
 
-      - name: Login to GitHub Container Registry
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Try Pull Base Images from Registry
+      - name: Build vendor libraries
         run: |
-          echo "Attempting to pull base and core images from registry..."
-          make try_pull_base_images || echo "Base images not found in registry, will build locally"
+          echo "Building vendor..."
+          make build_vendor_libraries 
+          make save || true
 
-      - name: Build
+      - name: Build ADORe CLI
         run: |
-          df -h
-          make build
-          make save_docker_images
+          echo "Building ADORe CLI core..."
+          make load || true
+          make build_adore_cli_core
+          echo "Building ADORe CLI..."
+          make build_adore_cli
+          make save || true
+
+      - name: Push Core Images to Registry
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          echo "Publishing base and core images to registry..."
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Registry: ${{ env.REGISTRY }}"
+          
+          # Check current image status
+          make registry_status || true
+          
+          # Push base and core images (user images are never pushed as they're user-specific)
+          make push_base_images
+          
+          echo "Images published successfully"
+
+      - name: Test ROS2 installation 
+        run: |
+          echo "Testing the ROS 2 installation in the ADORe CLI..."
+          make load || true
+          make test_ros2_installation
+          make save || true
+
+      - name: Build user libraries
+        run: |
+          make load || true
+          echo "Building user libraries..."
+          make build_user_libraries
+          make save || true
+
+      - name: Build ROS nodes
+        run: |
+          make load || true
+          echo "Building nodes..."
+          make build_ros_nodes
+          make save || true
+
+      - name: Build Services
+        run: |
+          make load || true
+          echo "Building services..."
+          make build_services
+          make save || true
 
       - name: CI Test
         run: |
           df -h
           make ci_test
-
-      - name: Push Base and Core Images
+      
+      - name: Documentation Lint
         run: |
-          echo "Pushing base and core images to registry..."
-          make push_base_images
-        if: github.event_name == 'push'
+          cd documentation
+          make lint
 
-      - name: Cleanup Old Registry Images
+      - name: Registry Status Summary
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          echo "Cleaning up old images, keeping last 2 commits for ros2 branch..."
-          make cleanup_registry_images
-        if: github.ref == 'refs/heads/ros2' && github.event_name == 'push'
+          echo "=== Final Registry Status ==="
+          make registry_status || true
 
       - name: Upload Logs
         uses: actions/upload-artifact@v4

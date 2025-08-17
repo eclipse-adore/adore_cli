@@ -1,38 +1,111 @@
 #!/usr/bin/env bash
 SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
-# The vendor dependency directory should be in the SOURCE_DIRECTORY/.log/.adore_cli/packages
-# since that's where the build process places the package info
-VENDOR_DEPENDENCY_DIRECTORY="${SOURCE_DIRECTORY}/.log/.adore_cli/packages"
-
 check_vendor_dependencies() {
+    # Set colors for output
     if [[ -n "$TERM" && "$TERM" != "dumb" && "$TERM" != "unknown" ]]; then
         BOLD='\033[1m'
         BLINK='\033[5m'
         ORANGE='\033[38;5;214m'
+        GREEN='\033[32m'
         RESET='\033[0m'
     else
         BOLD=''
         BLINK=''
         ORANGE=''
+        GREEN=''
         RESET=''
     fi
     
-    if [[ ! -d "$VENDOR_DEPENDENCY_DIRECTORY" ]]; then
-        printf "    ${BOLD}${BLINK}${ORANGE}WARNING:${RESET} Vendor dependencies not found. Build the vendor libraries with 'make build' and try again.\n"
-        printf "    Directory $VENDOR_DEPENDENCY_DIRECTORY does not exist\n"
+    # Calculate current package hash using same method as adore_cli.mk
+    current_package_hash=""
+    if [ -n "${SOURCE_DIRECTORY}" ] && [ -d "${SOURCE_DIRECTORY}" ]; then
+        vendor_path="${SOURCE_DIRECTORY}/vendor"
+        if [ -d "$vendor_path" ]; then
+            # Calculate hash of all .deb files in vendor directory
+            current_package_hash=$(find "$vendor_path" -type f -name "*.deb" 2>/dev/null | \
+                sort | xargs -r sha256sum 2>/dev/null | \
+                sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
+        else
+            current_package_hash="0000000"
+        fi
+    else
+        current_package_hash="0000000"
+    fi
+    
+    # Get container package hash from image tag
+    container_package_hash=""
+    
+    # Extract package hash from current image tag (format includes ph<hash>)
+    if [ -n "${ADORE_CLI_IMAGE}" ]; then
+        # Extract package hash from tag like: adore_cli:x86_64_main_abc1234_parent_def5678_ph9876543_username
+        container_package_hash=$(echo "${ADORE_CLI_IMAGE}" | grep -o 'ph[a-f0-9]\{7\}' | cut -c3-)
+    fi
+    
+    # If no hash in tag, check built tags file
+    if [ -z "$container_package_hash" ] && [ -n "${SOURCE_DIRECTORY}" ]; then
+        built_tags_file="${SOURCE_DIRECTORY}/.log/.adore_cli/built_tags"
+        if [ -f "$built_tags_file" ]; then
+            # Try to extract from USER tag which should contain package hash
+            user_tag=$(grep "^USER=" "$built_tags_file" 2>/dev/null | cut -d'=' -f2)
+            if [ -n "$user_tag" ]; then
+                container_package_hash=$(echo "$user_tag" | grep -o 'ph[a-f0-9]\{7\}' | cut -c3-)
+            fi
+        fi
+    fi
+    
+    # Count .deb packages in vendor directory
+    deb_count=0
+    if [ -d "${SOURCE_DIRECTORY}/vendor" ]; then
+        deb_count=$(find "${SOURCE_DIRECTORY}/vendor" -name "*.deb" -type f 2>/dev/null | wc -l)
+    fi
+    
+    printf "    Package Dependencies Status:\n"
+    printf "    Current package hash: ${current_package_hash}\n"
+    
+    # Check for missing vendor packages
+    if [ "$deb_count" -lt 1 ]; then
+        printf "    ${BOLD}${BLINK}${ORANGE}WARNING:${RESET} No vendor dependency packages found!\n" 
+        printf "        This may result in missing dependencies when building nodes or libraries.\n"  
+        printf "        Build the vendor libraries with 'make build' and try again.\n"
+        printf "        Expected location: ${SOURCE_DIRECTORY}/vendor/*.deb\n"
         return
     fi
     
-    deb_count=$(find "$VENDOR_DEPENDENCY_DIRECTORY" -name "*.deb" -type f 2>/dev/null | wc -l)
+    # Compare package hashes
+    if [ -z "$container_package_hash" ]; then
+        printf "    ${ORANGE}INFO:${RESET} Unable to determine container package hash\n"
+        printf "    Found $deb_count vendor dependency packages\n"
+        return
+    fi
     
-    if [ "$deb_count" -lt 1 ]; then
-        printf "\n" 
-        printf "    ${BOLD}${BLINK}${ORANGE}WARNING:${RESET} Vendor dependencies not found!\n" 
-        printf "        This may result in missing dependencies when building nodes or libraries.\n"  
-        printf "        Build the vendor libraries with 'make build' and try again.\n"
+    if [ "$current_package_hash" != "$container_package_hash" ]; then
+        printf "    ${BOLD}${BLINK}${ORANGE}WARNING:${RESET} Vendor packages have changed since container was built!\n"
+        printf "    Container package hash: ${container_package_hash}\n"
+        printf "    Current package hash:   ${current_package_hash}\n"
+        printf "\n"
+        printf "    This means your vendor .deb packages have changed since the ADORe CLI\n"
+        printf "    container was last built. The container may be missing updated dependencies.\n"
+        printf "\n"
+        printf "    ${BOLD}How to resolve:${RESET}\n"
+        printf "    1. Rebuild the ADORe CLI: ${GREEN}make build${RESET}\n"
+        printf "    2. Or rebuild from user layer: ${GREEN}make rebuild_from_layer LAYER=user${RESET}\n"
+        printf "    3. Then restart: ${GREEN}make cli${RESET}\n"
+        printf "\n"
+        printf "    ${BOLD}Current vendor packages (${deb_count} total):${RESET}\n"
+        # Show first few package names for reference
+        if [ -d "${SOURCE_DIRECTORY}/vendor" ]; then
+            find "${SOURCE_DIRECTORY}/vendor" -name "*.deb" -type f 2>/dev/null | \
+                head -5 | while read -r deb_file; do
+                printf "        $(basename "$deb_file")\n"
+            done
+            if [ "$deb_count" -gt 5 ]; then
+                printf "        ... and $((deb_count - 5)) more\n"
+            fi
+        fi
     else
-        printf "    ✓ Found $deb_count vendor dependency packages\n"
+        printf "    ${GREEN}✓${RESET} Found $deb_count vendor dependency packages (hash: ${current_package_hash})\n"
     fi
 }
+
 check_vendor_dependencies

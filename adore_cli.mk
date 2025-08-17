@@ -61,6 +61,9 @@ PARENT_IS_DIRTY:=$(shell cd ${SOURCE_DIRECTORY} && if [ -n "$$(git status --porc
 # === REQUIREMENTS HASH GENERATION ===
 REQUIREMENTS_SHORT_HASH:=$(shell find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | xargs -r cat 2>/dev/null | sha256sum | cut -c1-7)
 
+# === PACKAGES HASH GENERATION ===
+PACKAGES_SHORT_HASH:=$(shell find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | sort | xargs -r sha256sum 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
+
 # === MANIFEST PATHS ===
 REQUIREMENTS_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/requirements_manifest.sha256
 PACKAGES_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/packages_manifest.sha256
@@ -89,11 +92,11 @@ else
     ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_rh${REQUIREMENTS_SHORT_HASH}
 endif
 
-# User image tagging
+# User image tagging with package hash and username
 ifeq ($(PARENT_IS_ADORE_CLI),true)
-    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${USER}
 else
-    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_ph${PACKAGES_SHORT_HASH}_${USER}
 endif
 
 # Try to load actual built tags if they exist
@@ -218,6 +221,8 @@ _determine_actual_build_tags: _generate_requirements_manifest _generate_packages
 	@echo "Parent is ADORe CLI: ${PARENT_IS_ADORE_CLI}"
 	@echo "Parent repo dirty: ${PARENT_IS_DIRTY}"
 	@echo "Requirements short hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "Packages short hash: ${PACKAGES_SHORT_HASH}"
+	@echo "User: ${USER}"
 	@REQUIREMENTS_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_requirements_manifest_changed); \
 	PACKAGES_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_packages_manifest_changed); \
 	echo "Requirements manifest changed: $$REQUIREMENTS_CHANGED"; \
@@ -233,10 +238,10 @@ _determine_actual_build_tags: _generate_requirements_manifest _generate_packages
 	fi; \
 	USER_BASE_TAG="${ADORE_CLI_USER_TAG_DEFAULT}"; \
 	if [ "$$PACKAGES_CHANGED" = "true" ]; then \
-	    echo "→ Packages changed → using dirty user tag"; \
-	    ACTUAL_USER_TAG="$${USER_BASE_TAG}_dirty"; \
+	    echo "→ Packages changed → rebuilding user layer with current package hash"; \
+	    ACTUAL_USER_TAG="$${USER_BASE_TAG}"; \
 	else \
-	    echo "→ No package changes → using clean user tag"; \
+	    echo "→ No package changes → using clean user tag with package hash"; \
 	    ACTUAL_USER_TAG="$$USER_BASE_TAG"; \
 	fi; \
 	echo "ACTUAL_BASE_TAG=$$ACTUAL_BASE_TAG" > "${ADORE_CLI_TEMP_DIR}/build_vars"; \
@@ -462,6 +467,7 @@ _build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
 	@echo "Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
 	@echo "Parent dirty: ${PARENT_IS_DIRTY}"
 	@echo "Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "Packages hash: ${PACKAGES_SHORT_HASH}"
 	@echo "User: ${USER} (UID: ${UID}, GID: ${GID})"
 	@echo ""
 	@echo "Build strategy:"
@@ -879,6 +885,7 @@ adore_cli_info: ## Show configuration information for ADORe CLI
 	@echo "Parent Dirty: ${PARENT_IS_DIRTY}"
 	@echo "Parent is ADORe CLI: ${PARENT_IS_ADORE_CLI}"
 	@echo "Requirements Hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "Packages Hash: ${PACKAGES_SHORT_HASH}"
 	@echo "=== Built Tags Status ==="
 	@if [ -f "${BUILT_TAGS_FILE}" ]; then \
 	    echo "Built tags file exists: ${BUILT_TAGS_FILE}"; \
@@ -1083,6 +1090,7 @@ help_cli: ## Show ADORe CLI help
 	@echo "  ADORe CLI branch: ${ADORE_CLI_BRANCH} (${ADORE_CLI_SHORT_HASH})"
 	@echo "  Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
 	@echo "  Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "  Packages hash: ${PACKAGES_SHORT_HASH}"
 	@echo "  User: ${USER} (UID: ${UID}, GID: ${GID})"
 	@echo ""
 	@echo "Build strategy:"
