@@ -1,743 +1,1078 @@
-# ADORe CLI
+# ADORe CLI - Advanced Development Environment
 
-> A three-layer containerized development environment for ROS2-based autonomous driving research and development with registry caching and intelligent layer management.
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![ROS2](https://img.shields.io/badge/ros2-jazzy-blue?style=for-the-badge&logo=ros&logoColor=white)](https://docs.ros.org/en/jazzy/)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 
-## Overview
+A sophisticated, multi-layer Docker-based development environment for ROS2 projects with intelligent caching, dependency management, and seamless developer experience.
 
-ADORe CLI provides a complete, reproducible development environment with ROS2, debugging tools, visualization capabilities, and cross-platform support. It uses a sophisticated three-layer Docker architecture for maximum build efficiency and caching. The system automatically manages Docker containers, provides intelligent tag tracking, and features GitHub Container Registry integration for shared base layers. Simply drop requirements files anywhere in your project tree and ADORe CLI will automatically discover and install all dependencies during the build process.
-
-## Quick Start
+## 🚀 Quick Start
 
 ```bash
-# Clone and initialize submodules
+# Clone and setup
+git clone <your-repo>
+cd <your-repo>
 git submodule update --init --recursive
 
-# Start the development environment (auto-builds if needed)
-make cli
-
-# Force rebuild everything
+# Build the complete environment
 make build
 
-# Check build status
-make build_status
+# Start developing
+make cli
+```
 
-# Stop the environment
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [Architecture](#-architecture)
+- [Prerequisites](#-prerequisites)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Build System](#-build-system)
+- [Registry Integration](#-registry-integration)
+- [Troubleshooting](#-troubleshooting)
+- [Advanced Usage](#-advanced-usage)
+- [Configuration](#-configuration)
+- [Development Workflow](#-development-workflow)
+- [Contributing](#-contributing)
+
+## ✨ Features
+
+### 🏗️ Three-Layer Architecture
+- **Base Foundation**: OS + ROS2 core (highly cacheable, user-agnostic)
+- **Core Environment**: Complete toolchain + dependencies (shareable across users)  
+- **User Layer**: Personal customization + .deb packages (user-specific)
+
+### 🎯 Smart Build System
+- **Intelligent Caching**: Only rebuilds changed layers
+- **Requirements Tracking**: Automatic detection of dependency changes
+- **Manifest-Based Builds**: SHA256 fingerprinting for precise change detection
+- **Cross-Platform Support**: ARM64 and x86_64 architectures
+- **Registry Integration**: Pull/push layer caching for CI/CD
+
+### 🛠️ Developer Experience
+- **Interactive CLI**: Seamless container attach/detach
+- **Persistent Development**: Container state preservation
+- **Hot Reloading**: Live code mounting
+- **Shell Integration**: zsh with oh-my-zsh and custom prompt
+- **History Persistence**: Command history across sessions
+
+### 📦 Package Management
+- **Multi-Format Support**: APT packages, Python packages, PPAs, .deb files
+- **Automatic Discovery**: Scans project tree for requirements files
+- **Vendor Integration**: Custom .deb package installation
+- **Dependency Validation**: Runtime verification of installed packages
+
+### 🔧 Advanced Features
+- **Tag Management**: Intelligent container versioning
+- **Force Rebuilds**: Complete environment reset capability
+- **Selective Rebuilds**: Layer-specific rebuild options
+- **Debug Tools**: Container inspection and troubleshooting
+- **Status Monitoring**: Build and runtime status reporting
+
+## 🏛️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ADORe CLI Architecture                    │
+├─────────────────────────────────────────────────────────────┤
+│  User Layer (adore_cli)                                     │
+│  ├─ User account & permissions                              │
+│  ├─ .deb packages from vendor/                              │
+│  ├─ Personal shell configuration                            │
+│  └─ Development tools                                       │
+├─────────────────────────────────────────────────────────────┤
+│  Core Environment (adore_cli_core)                          │
+│  ├─ All project requirements (.system, .pip3, .ppa)        │
+│  ├─ ROS2 complete toolchain                                 │
+│  ├─ Development libraries                                   │
+│  └─ Build dependencies                                      │
+├─────────────────────────────────────────────────────────────┤
+│  Base Foundation (adore_cli_base)                           │
+│  ├─ Ubuntu 22.04 (Noble)                                   │
+│  ├─ ROS2 Jazzy core                                         │
+│  ├─ System fundamentals                                     │
+│  └─ Container runtime                                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Layer Responsibilities
+
+| Layer | Purpose | Rebuild Triggers | Sharing Level |
+|-------|---------|------------------|---------------|
+| **Base** | OS + ROS2 foundation | ADORe CLI code changes | Global (all users) |
+| **Core** | Project dependencies | Requirements file changes | Project-wide |
+| **User** | User customization | .deb package changes | User-specific |
+
+## 📋 Prerequisites
+
+### System Requirements
+- **OS**: Linux (Ubuntu 20.04+ recommended)
+- **Docker**: 28.0+ with BuildKit support
+- **Memory**: 8GB+ RAM recommended
+- **Storage**: 20GB+ free space
+- **Network**: Internet access for package downloads
+
+### Software Dependencies
+```bash
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+
+# Install Make
+sudo apt update
+sudo apt install make git
+
+# Logout and login to apply Docker group membership
+```
+
+## 🚀 Installation
+
+### 1. Clone Repository
+```bash
+git clone <your-adore-cli-repo>
+cd <repo-directory>
+git submodule update --init --recursive
+```
+
+### 2. Verify Installation
+```bash
+# Check Docker version
+docker --version
+
+# Check make availability
+make --version
+
+# Verify submodules
+ls -la make_gadgets/
+```
+
+### 3. Initial Build
+```bash
+# Build complete environment (first time)
+make build
+
+# Verify build success
+make build_status
+```
+
+## 🎯 Usage
+
+### Basic Commands
+
+| Command | Description | Use Case |
+|---------|-------------|----------|
+| `make build` | Build complete environment | First setup, major changes |
+| `make cli` | Start/attach to development environment | Daily development |
+| `make start` | Start container in background | Background services |
+| `make stop` | Stop container | End development session |
+| `make clean` | Remove all images and artifacts | Complete reset |
+
+### Development Workflow
+
+```bash
+# Start development session
+make cli
+
+# Inside container - your code is mounted at /tmp/adore
+cd /tmp/adore
+
+# Build your ROS2 packages
+colcon build
+
+# Run tests
+colcon test
+
+# Exit container (keeps running)
+exit
+
+# Reattach to same session
+make cli
+
+# Stop when done
 make stop
 ```
 
-## Key Features
-
-### Core Features
-- **One-command setup**: `make cli` handles everything automatically
-- **Smart tag tracking**: Detects environment changes and prompts for action
-- **Three-layer architecture**: Maximum caching efficiency with user-agnostic layers
-- **Registry integration**: GitHub Container Registry caching for faster builds
-- **Cross-platform builds**: Support for ARM64 and x86_64 architectures
-- **Auto-discovery**: Recursively finds and combines all requirements files
-
-### Development Features
-- **Hot reloading**: Automatically rebuilds when requirements change
-- **Multiple display modes**: Native X11, headless, or window manager support
-- **Development tools**: Integrated plotting, debugging, and tracing capabilities
-- **Interactive shell**: Full zsh with oh-my-zsh, git integration, and colorization
-- **Registry caching**: Shared base layers across users and CI/CD pipelines
-
-## Available Commands
-
-### Main User Commands
-| Command | Description |
-|---------|-------------|
-| `make cli` | Start or attach to development environment |
-| `make build` | Smart build of all required layers |
-| `make clean` | Remove containers and build artifacts |
-| `make run cmd="..."` | Execute command in container |
-| `make stop` | Stop running containers |
-| `make test` | Run CI tests |
-| `make info` | Show current configuration |
-| `make build_status` | Show status of all build layers |
-| `make help` | Show all available make targets |
-
-### Registry Commands
-| Command | Description |
-|---------|-------------|
-| `make try_pull_base_images` | Try to pull base and core images from registry |
-| `make push_base_images` | Push base and core images to registry |
-| `make registry_status` | Show registry status for base images |
-| `make cleanup_registry_images` | Cleanup old images in registry (ros2 branch only) |
-
-### Advanced Commands
-| Command | Description |
-|---------|-------------|
-| `make debug_run` | Launch interactive bash shell in user image |
-| `make debug_run_root` | Launch interactive bash shell as root |
-| `make rebuild_force` | Force rebuild all layers (ignore existing images) |
-| `make rebuild_from_layer LAYER=core` | Rebuild from specific layer |
-
-## Three-Layer Architecture
-
-ADORe CLI uses an intelligent three-layer Docker architecture for maximum efficiency:
-
-### 1. System Base Layer (`adore_cli_system`)
-- **Tag**: `${BRANCH}_${SHORT_HASH}_${ARCH}`
-- **Contents**: OS packages, ROS2 foundation, basic system tools
-- **Sharing**: User-agnostic, highly cacheable across all users
-- **Registry**: Shared in GitHub Container Registry for fast CI/CD
-
-### 2. Core Environment Layer (`adore_cli_core`) 
-- **Tag**: `${BRANCH}_${SHORT_HASH}_${ARCH}`
-- **Contents**: Complete ROS2 environment, development tools, X11 support
-- **Sharing**: User-agnostic, shared across all users for same git commit
-- **Registry**: Shared in GitHub Container Registry
-
-### 3. User Customization Layer (`adore_cli_user`)
-- **Tag**: `${BRANCH}_${SHORT_HASH}_${ARCH}_${USER}`
-- **Contents**: User-specific configuration, shell setup, permissions
-- **Sharing**: User-specific, thin layer built locally
-- **Registry**: Not shared (user-specific)
-
-### 4. Runtime Environment (`adore_cli`)
-- **Tag**: Complex tag including parent project info
-- **Contents**: Discovered requirements, development tools
-- **Sharing**: User and project specific
-- **Registry**: Not shared (contains project-specific requirements)
-
-## Build Process Intelligence
-
-### Smart Layer Detection
+### Running Commands
 ```bash
-# Build only missing layers
+# Execute single command
+make run cmd="colcon build"
+
+# Execute with complex commands
+make run cmd="source install/setup.bash && ros2 launch my_package my_launch.py"
+
+# Execute tests
+make run cmd="colcon test --packages-select my_package"
+```
+
+## 🔨 Build System
+
+### Build Targets
+
+#### Primary Targets
+```bash
+# Complete build (recommended)
 make build
 
-# Check what exists
+# Build only ADORe CLI layers
+make build_adore_cli
+
+# Force complete rebuild (ignores cache)
+make rebuild_force
+
+# Rebuild from specific layer
+make rebuild_from_layer LAYER=base    # Rebuild all layers
+make rebuild_from_layer LAYER=core    # Rebuild core + user
+make rebuild_from_layer LAYER=user    # Rebuild user only
+```
+
+#### Debug and Status
+```bash
+# Check build status
 make build_status
-System Base     adore_cli_system:ros2_ee6f341_x86_64      ✓ EXISTS
-Core Environment adore_cli_core:ros2_ee6f341_x86_64        ✓ EXISTS  
-User Layer       adore_cli_user:ros2_ee6f341_x86_64_user   ✗ MISSING
-Runtime          adore_cli:ros2_ee6f341_x86_64_...         ✗ MISSING
+
+# Show configuration
+make adore_cli_info
+
+# Debug interactive shell
+make debug_run
+
+# Debug as root
+make debug_run_root
 ```
 
-### Registry Integration
+### Build Strategy
+
+The build system uses intelligent layer detection:
+
+1. **Base Layer**: Rebuilds when ADORe CLI code changes
+2. **Core Layer**: Rebuilds when requirements files change
+3. **User Layer**: Rebuilds when .deb packages change
+
+### Requirements Management
+
+#### File Types
+- **`.system`**: APT package requirements
+- **`.pip3`**: Python package requirements  
+- **`.ppa`**: Ubuntu PPA repositories
+
+#### Example Files
+
+**requirements.system**:
+```
+ros-jazzy-rclcpp
+vim
+git
+cmake
+```
+
+**requirements.pip3**:
+```
+numpy
+matplotlib
+rosdep
+```
+
+**requirements.ppa**:
+```
+ppa:deadsnakes/ppa
+```
+
+#### Automatic Discovery
+The system automatically finds requirements files in your project:
 ```bash
-# Try registry first, build locally if needed
-make build
-=== ADORe CLI Core Build Process ===
-Attempting to pull from registry...
-✓ Pulled system base from registry
-✓ Pulled core environment from registry  
-Building user customization layer locally
+# Files are discovered recursively, excluding:
+# - .git/, .log/, build/, ros_translator/, .tmp/
+
+find . -name "*.system" -o -name "*.pip3" -o -name "*.ppa"
 ```
 
-### CI/CD Integration
-- **Automatic push**: Base and core layers pushed to GitHub Container Registry
-- **Smart caching**: Only builds what's missing from registry
-- **Storage management**: Keeps last 2 commits for ros2 branch
-- **Cross-architecture**: Separate images for ARM64 and x86_64
+### Package Installation
 
-## Display Modes and Graphical Applications
+#### .deb Packages
+Place `.deb` files in `vendor/` directory:
+```
+vendor/
+├── my-custom-lib_1.0.0_amd64.deb
+├── another-package_2.1.0_amd64.deb
+└── subdirectory/
+    └── nested-package_1.5.0_amd64.deb
+```
 
-ADORe CLI supports multiple display configurations for running graphical applications like RViz2, PlotJuggler, and custom visualization tools:
+Packages are automatically discovered and installed in the user layer.
 
-### Native Display Mode (Default)
-Directly forwards X11 display to host system:
+## 🌐 Registry Integration
+
+### Container Registry Support
+ADORe CLI supports pulling/pushing base and core layers to container registries for faster CI/CD builds.
+
+#### Setup
 ```bash
-# Uses host display (default)
-make cli
-```
-- **Pros**: Best performance, native look and feel
-- **Cons**: Requires X11 server on host
-- **Use case**: Local development with GUI applications
-
-### Headless Mode
-Runs without any display server for server/CI environments:
-```bash
-# Start in headless mode
-DISPLAY_MODE=headless make cli
-```
-- **Pros**: Minimal resource usage, works anywhere
-- **Cons**: No graphical applications
-- **Use case**: CI/CD, remote servers, command-line only workflows
-
-### Window Manager Mode
-Provides isolated display environment:
-```bash
-# Start with window manager
-DISPLAY_MODE=window_manager make cli
-```
-- **Pros**: Isolated from host display, consistent environment
-- **Cons**: Additional overhead
-- **Use case**: Reproducible GUI testing, multiple concurrent sessions
-
-### Graphical Application Support
-
-ADORe CLI includes pre-installed graphical tools:
-- **RViz2**: 3D visualization for robot data
-- **PlotJuggler**: Real-time plotting and data analysis
-- **Foxglove Bridge**: Real-time visualization and debugging
-- **X11 apps**: xterm, xclock for testing display connectivity
-
-### Testing Display Setup
-```bash
-# Inside ADORe CLI, test X11 forwarding
-xclock
-
-# Test ROS2 visualization
-rviz2
-
-# Launch PlotJuggler
-ros2 run plotjuggler plotjuggler
-```
-
-### Troubleshooting Display Issues
-```bash
-# Check display environment
-echo $DISPLAY
-
-# Test basic X11 connectivity
-xeyes
-
-# For permission issues on Linux hosts
-xhost +local:docker
-```
-
-## Automatic Requirements Discovery
-
-ADORe CLI automatically discovers and combines requirements files from your entire project tree:
-
-### Supported File Types
-- **`*.system`**: APT/system packages (one per line, supports `${ROS_DISTRO}` and `${OS_CODE_NAME}` variables)
-- **`*.pip3`**: Python packages (one per line, supports variable substitution)
-- **`*.ppa`**: Ubuntu PPAs (ppa:repository/name format)
-- **`*.deb`**: Direct .deb package files
-
-### Variable Substitution
-Requirements files support environment variable substitution:
-```bash
-# In any .system file
-ros-${ROS_DISTRO}-nav2-bringup
-ros-${ROS_DISTRO}-tracetools
-
-# Automatically expands to:
-ros-jazzy-nav2-bringup  
-ros-jazzy-tracetools
-```
-
-### How It Works
-1. **Recursive Search**: Scans entire source directory tree for requirements files
-2. **Variable Expansion**: Uses `envsubst` to expand `${ROS_DISTRO}` and other variables
-3. **Smart Filtering**: Excludes `/ros_translator/*` paths and removes comments/empty lines
-4. **Deduplication**: Combines and sorts all found dependencies
-5. **Layer-Aware Install**: Installs in appropriate Docker layer for maximum caching
-
-### File Locations
-Place requirements files anywhere in your project:
-```
-project/
-├── requirements.system                    # Root level
-├── module_a/
-│   └── requirements.module_a.pip3         # Module specific
-├── drivers/
-│   ├── camera/
-│   │   └── camera_driver.system           # Deep nesting
-│   └── requirements.ppa                   # PPAs
-└── vendor/
-    └── my_package.deb                     # Direct .deb files
-```
-
-## Registry Features
-
-### GitHub Container Registry Integration
-ADORe CLI integrates with GitHub Container Registry (ghcr.io) for sharing base layers:
-
-```bash
-# Check what's available in registry
-make registry_status
-=== Registry Status ===
-Registry: ghcr.io/dlr-ts/
-Checking system base: ghcr.io/dlr-ts/adore_cli_system:ros2_ee6f341_x86_64
-  ✓ Available in registry
-Checking core environment: ghcr.io/dlr-ts/adore_cli_core:ros2_ee6f341_x86_64  
-  ✓ Available in registry
-```
-
-### CI/CD Optimization
-- **Automatic caching**: CI builds push base/core layers to registry
-- **Fast rebuilds**: Subsequent builds pull from registry instead of building
-- **Storage management**: Cleanup keeps only last 2 commits for ros2 branch
-- **Multi-architecture**: Separate cache for ARM64 and x86_64
-
-### Local Registry Usage
-```bash
-# Set repository for local testing
+# Set repository for registry operations
 export GITHUB_REPOSITORY=your-org/your-repo
 
-# Try pulling base images
+# Check registry status
+make registry_status
+```
+
+#### Pull from Registry
+```bash
+# Attempt to pull base and core images
 make try_pull_base_images
 
-# Push your built images (requires write access)
-make push_base_images
-```
-
-## Cross-Platform Development
-
-Build for different architectures with automatic dependency management:
-
-```bash
-# ARM64 (automatically sets up cross-compilation)
-ARCH=arm64 make build
-
-# x86_64 (default)
-ARCH=x86_64 make build
-
-# Check current architecture
-echo $ARCH
-```
-
-**Cross-compilation features:**
-- **Automatic setup**: Installs qemu-user-static and buildx if needed (Ubuntu only)
-- **Registry awareness**: Separate images for each architecture
-- **Fallback support**: Graceful fallback to native build if cross-compilation fails
-
-## Tag Memory System
-
-ADORe CLI intelligently tracks container states and handles environment changes:
-
-### Smart Change Detection
-```bash
-make cli
-Warning: ADORE_CLI tag has changed
-  Previous: adore_cli:ros2_abc123_x86_64_main_def456_user
-  Current:  adore_cli:ros2_ee6f341_x86_64_feature_new_857bf02_user
-
-Choose action: (r)ebuild with new tag, (a)ttach to old container, or (q)abort? [r/a/q]:
-```
-
-### Intelligent Options
-- **Rebuild (r)**: Build with new environment configuration
-- **Attach (a)**: Continue using existing container (preserves work)
-- **Quit (q)**: Abort and make no changes
-
-### History Management
-- **Automatic tracking**: Remembers last used container configuration
-- **Cross-session**: Works across terminal sessions
-- **Auto-cleanup**: Clears history on intentional rebuilds
-
-## Customization
-
-### Adding System Packages
-Create `*.system` files anywhere in your project:
-```bash
-# Example: my_module/requirements.system
-ros-${ROS_DISTRO}-nav2-bringup
-ros-${ROS_DISTRO}-plotjuggler-ros
-gdb
-htop
-vim
-```
-
-### Adding Python Packages
-Create `*.pip3` files anywhere in your project:
-```bash
-# Example: algorithms/requirements.pip3
-numpy>=1.20.0
-matplotlib
-scipy
-pandas
-```
-
-### Adding PPAs
-Create `requirements.ppa` files anywhere in your project:
-```bash
-# Example: tools/requirements.ppa
-ppa:deadsnakes/ppa
-ppa:graphics-drivers/ppa
-```
-
-## Debian Package Integration
-
-ADORe CLI automatically discovers and installs Debian (.deb) packages from your project tree during the build process. This allows you to include custom packages, proprietary software, or specific versions that aren't available through standard repositories.
-
-### Automatic .deb Discovery
-
-#### File Placement
-Place `.deb` files anywhere in your project tree. The build system will automatically find and install them:
-
-```
-project/
-├── vendor/
-│   ├── custom_driver.deb              # Vendor packages
-│   └── proprietary_lib.deb            # Proprietary software
-├── modules/
-│   └── camera/
-│       └── camera_firmware.deb       # Module-specific packages
-└── tools/
-    └── debug_tools.deb               # Development tools
-```
-
-#### Discovery Process
-1. **Recursive Scan**: Searches entire project tree for `*.deb` files
-2. **Gathering**: Copies all found .deb files to build context
-3. **Installation**: Installs packages in runtime layer using `dpkg`
-4. **Dependency Resolution**: Handles dependencies automatically
-
-### Installation Layer
-
-**.deb files are installed in the Runtime Layer:**
-- **When**: During runtime image build (final layer)
-- **Why**: Allows project-specific packages without affecting shared base layers
-- **User-specific**: Each user/project combination gets their own .deb packages
-- **No caching**: Runtime layer is rebuilt when .deb files change
-
-### Installation Process
-
-The build system handles .deb installation automatically:
-
-```bash
-# During build process
-Copying .tmp/packages/. /tmp/
-Workdir /tmp
-RUN find . -maxdepth 1 -type f -name "*.deb" -print0 | \
-    xargs -0 sudo dpkg -i --force-all 2>/dev/null || true
-```
-
-### Supported Package Types
-
-- **Architecture-specific**: Packages built for specific architectures (amd64, arm64)
-- **Multi-architecture**: Packages that work across architectures
-- **Custom builds**: Locally built packages from your development
-- **Vendor packages**: Third-party proprietary software
-- **Firmware packages**: Hardware-specific drivers and firmware
-
-### Best Practices
-
-#### Package Naming
-```bash
-# Good: descriptive names
-vendor/
-├── nvidia_driver_535.54_amd64.deb
-├── custom_ros2_node_v1.2.3_arm64.deb
-└── proprietary_algorithm_20231215.deb
-
-# Avoid: generic names
-├── package.deb                    # Too generic
-├── temp.deb                       # Unclear purpose
-```
-
-#### Architecture Handling
-```bash
-# Organize by architecture if needed
-vendor/
-├── amd64/
-│   └── x86_specific_driver.deb
-├── arm64/
-│   └── arm_specific_firmware.deb
-└── universal/
-    └── arch_independent_tool.deb
-```
-
-#### Documentation
-Document your .deb packages in your project:
-```bash
-# vendor/README.md
-## Custom Packages
-
-- `nvidia_driver_535.54_amd64.deb`: NVIDIA GPU driver v535.54
-- `custom_sensor_driver.deb`: Proprietary sensor interface
-- `firmware_update_tool.deb`: Hardware firmware updater
-```
-
-### Debugging .deb Installation
-
-#### Check Installation Status
-```bash
-# Inside ADORe CLI container
-dpkg -l | grep -i custom           # List installed custom packages
-dpkg -s package_name               # Check specific package status
-apt list --installed | grep local  # Show locally installed packages
-```
-
-#### Installation Logs
-```bash
-# Check build logs for .deb installation
-make build 2>&1 | grep -A5 -B5 "\.deb"
-
-# Debug specific package
-docker run -it --rm adore_cli_image dpkg -l | grep package_name
-```
-
-#### Common Issues
-
-**Dependency conflicts:**
-```bash
-# Fix: Install dependencies first via requirements.system
-# my_module/requirements.system
-libdependency1
-libdependency2
-
-# Then place .deb file
-# my_module/custom_package.deb
-```
-
-**Architecture mismatches:**
-```bash
-# Fix: Use architecture-specific organization
-vendor/
-├── amd64/package_amd64.deb
-└── arm64/package_arm64.deb
-
-# Or use multi-arch packages
-vendor/package_all.deb
-```
-
-**Installation order:**
-```bash
-# .deb packages are installed AFTER system packages
-# 1. System packages (requirements.system)
-# 2. Python packages (requirements.pip3)  
-# 3. Debian packages (.deb files)
-# 4. ADORe CLI specific packages
-```
-
-### Example Workflow
-
-#### Adding a Custom Package
-```bash
-# 1. Place .deb file in project
-cp ~/Downloads/custom_driver.deb vendor/
-
-# 2. Rebuild to install
+# Build will automatically try registry first
 make build
-
-# 3. Verify installation
-make cli
-dpkg -l | grep custom_driver
 ```
 
-#### Building and Including Custom Packages
+#### Push to Registry
 ```bash
-# 1. Build your custom package
-dpkg-buildpackage -us -uc
-
-# 2. Copy to vendor directory
-cp ../my-package_1.0_amd64.deb vendor/
-
-# 3. Rebuild ADORe CLI
-make build
-
-# 4. Test package functionality
-make run cmd="my-custom-command --version"
-```
-
-### Integration with Requirements System
-
-.deb packages work seamlessly with other requirements:
-
-```
-project/
-├── requirements.system              # System dependencies
-│   ├── libcustom-dev               # Dependencies for .deb
-│   └── build-essential             # Build tools
-├── requirements.pip3               # Python packages
-│   └── custom-python-wrapper       # Python interface
-└── vendor/
-    └── custom_native_lib.deb       # Native library .deb
-```
-
-**Installation order ensures dependencies are satisfied:**
-1. System packages installed first (provides dependencies)
-2. Python packages installed second  
-3. .deb packages installed third (can use system dependencies)
-4. ADORe CLI packages installed last
-
-### Limitations and Considerations
-
-- **No automatic updates**: .deb packages are installed once during build
-- **Dependency management**: Must manually ensure dependencies via requirements.system
-- **Architecture awareness**: Ensure .deb matches target architecture
-- **Size impact**: Large .deb files increase image size and build time
-- **Security**: Only include trusted .deb packages from verified sources
-- **Licensing**: Ensure .deb package licenses are compatible with your project
-
----
-
-**Note**: .deb packages are installed in the runtime layer and do not benefit from the shared base layer caching. For packages that could benefit multiple users, consider requesting them as system packages instead.
-
-### Advanced Customization
-```bash
-# Check current configuration
-make info
-=== ADORe CLI Configuration ===
-ROS_DISTRO: jazzy
-OS_CODE_NAME: noble
-ARCH: x86_64
-BRANCH: feature/new-feature
-SHORT_HASH: ee6f341
-```
-
-## Environment Variables
-
-| Variable | Description | Default | Example |
-|----------|-------------|---------|---------|
-| `ROS_DISTRO` | ROS2 distribution | `jazzy` | `humble`, `iron` |
-| `OS_CODE_NAME` | Ubuntu codename | `noble` | `jammy`, `focal` |
-| `ARCH` | Target architecture | Host arch | `x86_64`, `arm64` |
-| `SOURCE_DIRECTORY` | Host source directory | Current directory | `/home/user/workspace` |
-| `DISPLAY_MODE` | Display mode | `native` | `headless`, `window_manager` |
-| `GITHUB_REPOSITORY` | GitHub repo for registry | None | `org/repo` |
-| `DOCKER_BUILDKIT` | Enable BuildKit | `1` | `0`, `1` |
-
-## Requirements
-
-### System Requirements
-- **Docker**: Version 28+ with BuildKit support
-- **Make**: GNU Make for build orchestration
-- **Git**: For repository management and submodules
-- **Base OS**: Ubuntu 20.04+ (for cross-compilation features)
-
-### Optional Requirements
-- **qemu-user-static**: For cross-compilation (auto-installed on Ubuntu)
-- **binfmt-support**: For cross-compilation (auto-installed on Ubuntu)
-- **X11 server**: For native display mode on Linux hosts
-
-### Resource Requirements
-- **RAM**: 4GB minimum, 8GB recommended
-- **Disk**: 10GB for base images, additional space for builds
-- **Network**: Internet access for package installation and registry operations
-
-## Development Workflow
-
-### Standard Workflow
-1. **Initialize**: `git submodule update --init --recursive`
-2. **Start environment**: `make cli` (auto-builds and caches), **does not compile nodes, libraries or vendor libraries**
-3. **Develop**: Edit code in mounted source directory
-4. **Add dependencies**: Create requirements files anywhere in project
-5. **Update environment**: `make build` (discovers new requirements)
-6. **Test**: `make test` for validation
-7. **Iterate**: Continue development with automatic layer caching
-
-### Multi-User Workflow
-```bash
-# User A builds and pushes base layers
-USER=alice make build
+# Push base and core layers (requires push permissions)
 make push_base_images
-
-# User B pulls cached layers (much faster)
-USER=bob make build
-✓ Pulled system base from registry
-✓ Pulled core environment from registry
-Building user layer locally...
 ```
 
 ### CI/CD Integration
-- **GitHub Actions**: Automatic base layer building and caching
-- **Registry cleanup**: Automatic cleanup of old images
-- **Multi-architecture**: Parallel builds for ARM64 and x86_64
-- **Test integration**: Comprehensive test suite with layer validation
+```yaml
+# GitHub Actions example
+- name: Build ADORe CLI
+  run: |
+    export GITHUB_REPOSITORY=${{ github.repository }}
+    make build
 
-## Included Tools and Packages
+- name: Push to registry
+  if: github.ref == 'refs/heads/main'
+  run: make push_base_images
+```
 
-### ROS2 Environment
-- **ROS2 Jazzy**: Complete ROS2 development stack
-- **Build tools**: colcon, rosdep, ros2 CLI tools
-- **Navigation**: nav2 stack for autonomous navigation
-- **Tracing**: ROS2 tracing tools for performance analysis
-
-### Visualization and Debugging
-- **PlotJuggler**: Real-time data plotting and analysis
-- **Foxglove Bridge**: Modern visualization and debugging
-- **RViz2**: 3D visualization for robot data
-- **GDB/GDBServer**: Full debugging support
-- **Network tools**: telnet, netcat, traceroute, nmap
-
-### Development Environment
-- **Shell**: zsh with oh-my-zsh, git integration, colorization
-- **Editors**: vim with development-friendly configuration
-- **Build optimization**: ccache for faster compilation
-- **Version control**: git with full CLI integration
-- **System tools**: htop, fzf, cowsay for enhanced productivity
-
-### Language Support
-- **Python**: Python 3 with development packages
-- **C++**: Full C++ development stack with debugging
-- **CMake**: Modern CMake for cross-platform builds
-- **Clang**: clang-format for code formatting
-
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### Common Issues
 
-**Build failures:**
+#### Build Failures
 ```bash
-# Check layer status
-make build_status
+# Check Docker status
+docker info
 
-# Force clean rebuild
-make clean
-make build
+# Check disk space
+df -h
 
+# Clean Docker cache
+docker system prune -f
 
-# Force clean rebuild without using registry cache
+# Force complete rebuild
 make rebuild_force
-
-# Check Docker version
-docker version
 ```
 
-**Registry issues:**
+#### Container Issues
 ```bash
-# Check registry status
-make registry_status
-
-# Set repository manually
-export GITHUB_REPOSITORY=git@github.com:eclipse-adore/adore_cli.git
-make registry_status
-```
-
-**Display problems:**
-```bash
-# Test X11 forwarding
-make cli
-xclock  # Should open a clock window
-
-# Check permissions (Linux)
-xhost +local:docker
-```
-
-**Permission issues:**
-```bash
-# Check user/group IDs
-make info | grep -E "(UID|GID)"
-
-# Rebuild with correct IDs
-make clean
-UID=$(id -u) GID=$(id -g) make build
-```
-
-### Debug Commands
-```bash
-# Interactive debug session
-make debug_run
-
-# Root access for system debugging
-make debug_run_root
+# Check container status
+docker ps -a
 
 # Check container logs
-docker logs adore_cli_container_name
+docker logs adore_cli_<tag>
 
-# Inspect built images
-docker images | grep adore_cli
+# Debug container
+make debug_run
 ```
 
-### Getting Help
+#### Requirements Issues
 ```bash
-# Inside ADORe CLI
-help
+# Check requirements detection
+make adore_cli_info
 
-# Show all make targets
-make help
+# Debug requirements gathering
+cd adore_cli_core && make debug_requirements
+
+# Rebuild from core layer
+make rebuild_from_layer LAYER=core
+```
+
+#### Permission Issues
+```bash
+# Check user ID mapping
+id
+
+# Verify Docker group membership
+groups | grep docker
+
+# Fix Docker permissions
+sudo usermod -aG docker $USER
+# Logout and login
+```
+
+### Build Error Recovery
+
+#### Base Layer Failures
+```bash
+# Check Docker daemon
+sudo systemctl status docker
+
+# Manually build base layer
+cd adore_cli_base && make build
+
+# Check disk space and clean
+df -h
+docker system prune -f
+```
+
+#### Core Layer Failures
+```bash
+# Check requirements syntax
+find . -name "*.system" -exec cat {} \;
+
+# Manually build core layer
+cd adore_cli_core && make build
+
+# Debug requirements gathering
+make debug_requirements
+```
+
+#### User Layer Failures
+```bash
+# Check .deb packages
+find vendor/ -name "*.deb" -ls
+
+# Manually build user layer
+cd adore_cli && make build
+
+# Debug package installation
+make debug_packages
+```
+
+### Performance Issues
+
+#### Slow Builds
+```bash
+# Enable parallel builds
+export DOCKER_BUILDKIT=1
+
+# Use registry for base layers
+make try_pull_base_images
+
+# Check available resources
+free -h
+df -h
+```
+
+#### Large Images
+```bash
+# Check image sizes
+docker images | grep adore_cli
+
+# Clean unused images
+docker image prune -f
+
+# Optimize requirements
+# Remove unnecessary packages from requirements files
+```
+
+## 🔧 Advanced Usage
+
+### Custom Configuration
+
+#### Environment Variables
+```bash
+# Architecture selection
+export ARCH=amd64  # or arm64
+
+# ROS Distribution
+export ROS_DISTRO=jazzy
+
+# Custom hostname
+export HOSTNAME=my-dev-environment
+
+# Build configuration
+export DOCKER_BUILDKIT=1
+export COMPOSE_BAKE=true
+```
+
+#### Custom Docker Compose
+Create `docker-compose.override.yaml`:
+```yaml
+services:
+  adore_cli:
+    volumes:
+      - ./my-custom-config:/opt/custom
+    environment:
+      - CUSTOM_VAR=value
+    ports:
+      - "8080:8080"
+```
+
+### Cross-Platform Builds
+
+#### ARM64 on x86_64
+```bash
+# Enable cross-compilation
+export ARCH=arm64
+export CROSS_COMPILE=true
+
+# Build for ARM64
+make build
+
+# The system will automatically install qemu and configure buildx
+```
+
+### Multiple Environments
+
+#### Project-Specific Environments
+```bash
+# Each project gets its own environment based on:
+# - Project branch and commit
+# - Requirements hash
+# - ADORe CLI version
+
+# Switch between projects
+cd /path/to/project1
+make cli  # Gets project1-specific environment
+
+cd /path/to/project2  
+make cli  # Gets project2-specific environment
+```
+
+#### Branch-Specific Environments
+```bash
+# Different branches get different containers
+git checkout feature-branch
+make cli  # New container for feature-branch
+
+git checkout main
+make cli  # Different container for main
+```
+
+### Development Tools Integration
+
+#### VS Code Integration
+```json
+// .devcontainer/devcontainer.json
+{
+  "name": "ADORe CLI",
+  "dockerComposeFile": "../docker-compose.yaml",
+  "service": "adore_cli",
+  "workspaceFolder": "/tmp/adore",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-iot.vscode-ros"
+      ]
+    }
+  }
+}
+```
+
+#### Git Integration
+```bash
+# Inside container, git credentials are inherited
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+
+# SSH keys are mounted from host
+ls ~/.ssh/
+```
+
+## ⚙️ Configuration
+
+### Directory Structure
+```
+your-project/
+├── adore_cli/                 # ADORe CLI submodule
+│   ├── adore_cli_base/        # Base layer Dockerfiles
+│   ├── adore_cli_core/        # Core layer Dockerfiles
+│   ├── adore_cli/             # User layer Dockerfiles
+│   ├── tools/                 # Helper scripts
+│   ├── adore_cli.mk           # Main makefile
+│   └── docker-compose.yaml    # Container orchestration
+├── vendor/                    # .deb packages
+│   └── *.deb
+├── requirements.system        # APT packages
+├── requirements.pip3          # Python packages
+├── requirements.ppa           # Ubuntu PPAs
+├── .log/                      # Build artifacts
+│   └── .adore_cli/
+│       ├── built_tags         # Image tag cache
+│       ├── requirements/      # Discovered requirements
+│       └── packages/          # Package cache
+└── Makefile                   # Project makefile
+```
+
+### Configuration Files
+
+#### Main Makefile
+```makefile
+# Include ADORe CLI
+ROOT_DIR := $(shell dirname "$(realpath $(firstword $(MAKEFILE_LIST)))")
+SOURCE_DIRECTORY := ${ROOT_DIR}
+ADORE_CLI_WORKING_DIRECTORY := ${ROOT_DIR}
+
+include ${ROOT_DIR}/adore_cli.mk
+
+# Your project targets
+.PHONY: my_build
+my_build:
+    make run cmd="colcon build"
+```
+
+#### Environment Configuration
+```bash
+# .env file (optional)
+DOCKER_BUILDKIT=1
+ROS_DISTRO=jazzy
+HOSTNAME=my-adore-cli
+```
+
+### Advanced Configuration
+
+#### Custom Base Images
+Modify `adore_cli_base/Dockerfile.adore_cli_base`:
+```dockerfile
+# Use custom base image
+FROM my-custom-ros:jazzy AS adore_cli_base
+
+# Add custom configuration
+COPY my-custom-config.sh /opt/
+RUN bash /opt/my-custom-config.sh
+```
+
+#### Custom Requirements Processing
+Override `adore_cli_core/gather_requirements_files.sh`:
+```bash
+#!/bin/bash
+# Custom requirements gathering logic
+# Your custom implementation
+```
+
+## 🔄 Development Workflow
+
+### Daily Development
+
+```bash
+# Morning routine
+cd ~/my-ros-project
+make cli
+
+# Inside container
+cd /tmp/adore
+source install/setup.bash  # If you have existing builds
+
+# Development cycle
+# 1. Edit code (in host editor or container)
+# 2. Build
+colcon build --packages-select my_package
+
+# 3. Test
+colcon test --packages-select my_package
+
+# 4. Run
+ros2 launch my_package my_launch.py
+
+# End of day
+exit  # Detach but keep container running
+make stop  # Or keep running for tomorrow
+```
+
+### Adding Dependencies
+
+```bash
+# Add APT package
+echo "new-package-name" >> requirements.system
+
+# Add Python package
+echo "new-python-package" >> requirements.pip3
+
+# Rebuild core layer (includes new dependencies)
+make rebuild_from_layer LAYER=core
+
+# Restart with new dependencies
+make cli
+```
+
+### Package Development
+
+```bash
+# Create .deb package
+# (your package build process)
+
+# Copy to vendor directory
+cp my-package_1.0.0_amd64.deb vendor/
+
+# Rebuild user layer (includes new package)
+make rebuild_from_layer LAYER=user
+
+# Start with new package installed
+make cli
+```
+
+### Team Development
+
+#### Sharing Environments
+```bash
+# Push base/core layers to registry
+make push_base_images
+
+# Team members can pull
+make try_pull_base_images
+make build  # Will use pulled layers
+```
+
+#### Consistent Environments
+```bash
+# All team members get same environment based on:
+# 1. ADORe CLI commit hash
+# 2. Project requirements hash
+# 3. .deb package manifest
+
+# Just run these commands:
+git pull
+git submodule update
+make build
+make cli
+```
+
+### CI/CD Integration
+
+#### GitHub Actions
+```yaml
+name: CI
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      
+      - name: Build environment
+        run: |
+          export GITHUB_REPOSITORY=${{ github.repository }}
+          make build
+      
+      - name: Run tests
+        run: make run cmd="colcon test"
+      
+      - name: Push layers
+        if: github.ref == 'refs/heads/main'
+        run: make push_base_images
+```
+
+#### GitLab CI
+```yaml
+stages:
+  - build
+  - test
+
+build:
+  stage: build
+  script:
+    - git submodule update --init --recursive
+    - make build
+  cache:
+    paths:
+      - .log/
+
+test:
+  stage: test
+  script:
+    - make run cmd="colcon build"
+    - make run cmd="colcon test"
+```
+
+## 🏷️ Tagging and Versioning
+
+### Image Tagging Strategy
+
+ADORe CLI uses intelligent tagging based on multiple factors:
+
+#### Base Layer Tags
+```
+Format: adore_cli_base:<arch>_<adore_cli_branch>_<adore_cli_hash>[_dirty]
+Example: adore_cli_base:x86_64_main_abc1234_dirty
+```
+
+#### Core Layer Tags
+```
+# When used in ADORe CLI repo:
+adore_cli_core:<arch>_<adore_cli_branch>_<adore_cli_hash>
+
+# When used in parent project:
+adore_cli_core:<arch>_<adore_cli_branch>_<adore_cli_hash>_<parent_branch>_<parent_hash>_rh<requirements_hash>
+
+Example: adore_cli_core:x86_64_main_abc1234_feature_def5678_rh9876543
+```
+
+#### User Layer Tags
+```
+# When used in ADORe CLI repo:
+adore_cli:<arch>_<adore_cli_branch>_<adore_cli_hash>
+
+# When used in parent project:
+adore_cli:<arch>_<adore_cli_branch>_<adore_cli_hash>_<parent_branch>_<parent_hash>
+
+Example: adore_cli:x86_64_main_abc1234_feature_def5678
+```
+
+### Tag Management
+
+#### View Current Tags
+```bash
+# Show all current image names
+make images_adore_cli
 
 # Show current configuration
-make info
+make adore_cli_info
+
+# Show container name
+make container_name_adore_cli
 ```
+
+#### Tag History
+ADORe CLI maintains a history of used tags to enable seamless environment switching:
+
+```bash
+# History is stored in:
+.log/.adore_cli/adore_cli_tag_history
+
+# When tags change, you get prompted:
+# "Tag changed from X to Y. (r)ebuild, (a)ttach to old, (q)abort?"
+```
+
+## 📊 Monitoring and Debugging
+
+### Build Monitoring
+
+```bash
+# Check build status
+make build_status
+
+# Show detailed configuration
+make adore_cli_info
+
+# Monitor Docker resource usage
+docker stats
+
+# Check disk usage
+docker system df
+```
+
+### Runtime Monitoring
+
+```bash
+# Check container status
+docker ps
+
+# View container logs
+docker logs adore_cli_<tag>
+
+# Monitor resource usage
+docker stats adore_cli_<tag>
+
+# Inspect container
+docker inspect adore_cli_<tag>
+```
+
+### Debug Information
+
+#### Requirements Debug
+```bash
+# Debug requirements gathering
+cd adore_cli_core && make debug_requirements
+
+# Show requirements manifest
+cat .log/.adore_cli/requirements_manifest.sha256
+
+# Check requirements changes
+tools/requirements_file_change_status.sh
+```
+
+#### Package Debug
+```bash
+# Debug package gathering
+cd adore_cli && make debug_packages
+
+# Show package manifest
+cat .log/.adore_cli/packages_manifest.sha256
+
+# Test package installation
+make test_package_installation
+```
+
+#### Container Debug
+```bash
+# Interactive shell in user image
+make debug_run
+
+# Interactive shell as root
+make debug_run_root
+
+# Test ROS2 installation
+make test_ros2_installation
+```
+
+## 🔐 Security Considerations
+
+### Container Security
+
+#### Privileged Mode
+ADORe CLI runs containers in privileged mode for:
+- Hardware access (cameras, sensors)
+- Docker-in-Docker support
+- Advanced debugging capabilities
+
+#### Host Access
+The container has access to:
+- Docker socket (for container management)
+- X11 display (for GUI applications)
+- Host networking (for ROS2 communication)
+- Source code directories
+
+#### Security Best Practices
+```bash
+# Use separate development machine
+# Don't run on production systems
+# Regular security updates
+sudo apt update && sudo apt upgrade
+
+# Keep Docker updated
+sudo apt update docker-ce
+
+# Monitor container activity
+docker logs adore_cli_<tag>
+```
+
+### Data Protection
+
+#### Persistent Data
+```bash
+# Code changes persist (mounted from host)
+# Build artifacts persist in .log/
+# Container-specific changes are ephemeral
+
+# Backup important data
+cp -r .log/ backup/
+```
+
+#### Secrets Management
+```bash
+# SSH keys are mounted read-only
+# Don't store secrets in requirements files
+# Use environment variables for sensitive config
+```
+
+## 🤝 Contributing
+
+### Development Setup
+
+```bash
+# Clone ADORe CLI for development
+git clone <adore-cli-repo>
+cd adore-cli
+git submodule update --init --recursive
+
+# Make changes to ADORe CLI itself
+# Test changes
+make build
+make cli
+
+# Run in parent project
+cd ../my-project
+# Update submodule to your branch
+cd adore_cli
+git checkout your-feature-branch
+cd ..
+make build
+```
+
+### Testing Changes
+
+```bash
+# Test base layer changes
+cd adore_cli_base && make build
+
+# Test core layer changes  
+cd adore_cli_core && make build
+
+# Test user layer changes
+cd adore_cli && make build
+
+# Test complete integration
+make rebuild_force
+make cli
+```
+
+### Code Style
+
+#### Makefile Style
+- Use tabs for indentation
+- Add help comments with `##`
+- Group related targets
+- Use `.PHONY` for non-file targets
+
+#### Bash Style
+- Use `set -euo pipefail`
+- Quote variables: `"${VAR}"`
+- Use functions for complex logic
+- Add error handling
+
+#### Docker Style
+- Multi-stage builds
+- Minimize layers
+- Use BuildKit features
+- Add meaningful labels
+
+### Submitting Changes
+
+1. **Fork** the repository
+2. **Create** feature branch
+3. **Make** changes with tests
+4. **Verify** all targets work
+5. **Submit** pull request with description
+
+### Issue Reporting
+
+Include this information:
+```bash
+# System information
+uname -a
+docker --version
+make --version
+
+# ADORe CLI information
+make adore_cli_info
+make build_status
+
+# Error reproduction steps
+# Expected vs actual behavior
+# Relevant log output
+```
+
+## 📚 Additional Resources
+
+### Documentation
+- [ROS2 Documentation](https://docs.ros.org/en/jazzy/)
+- [Docker Documentation](https://docs.docker.com/)
+- [Ubuntu Packages](https://packages.ubuntu.com/)
+
+### Related Projects
+- [ROS2 Development Containers](https://github.com/athackst/vscode_ros2_workspace)
+- [Docker ROS](https://github.com/osrf/docker_images)
+
+### Community
+- [ROS Discourse](https://discourse.ros.org/)
+- [Docker Community](https://forums.docker.com/)
+
+## 📄 License
+
+This project is licensed under the Eclipse Public License - v 2.0 - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- ROS2 community for the excellent robotics framework
+- Docker team for containerization technology
+- Ubuntu team for the stable base system
+- All contributors and testers
 
 ---
 
+**Made with ❤️ for the ROS2 development community**

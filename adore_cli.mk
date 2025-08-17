@@ -119,8 +119,7 @@ ADORE_CLI_CONTAINER_NAME:=adore_cli_${ADORE_CLI_TAG}
 
 # === DIRECTORY CONFIGURATION ===
 SOURCE_DIRECTORY?=${REPO_DIRECTORY}
-ADORE_CLI_WORKING_DIRECTORY?=${REPO_DIRECTORY}
-ADORE_DIRECTORY?=${REPO_DIRECTORY}
+ADORE_CLI_WORKING_DIRECTORY?=${SOURCE_DIRECTORY}
 DOCKER_COMPOSE_FILE?=${ADORE_CLI_MAKEFILE_PATH}/docker-compose.yaml
 REPO_DIRECTORY:=${ADORE_CLI_MAKEFILE_PATH}
 
@@ -473,21 +472,128 @@ _build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
 	@echo "Starting build process..."
 	@echo "=========================="
 	@source "${ADORE_CLI_TEMP_DIR}/build_vars" && \
-	ADORE_CLI_BASE_IMAGE="adore_cli_base:$$ACTUAL_BASE_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_base && \
-	ADORE_CLI_BASE_IMAGE="adore_cli_base:$$ACTUAL_BASE_TAG" ADORE_CLI_CORE_IMAGE="adore_cli_core:$$ACTUAL_CORE_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_core && \
-	ADORE_CLI_IMAGE="adore_cli:$$ACTUAL_USER_TAG" ADORE_CLI_CORE_IMAGE="adore_cli_core:$$ACTUAL_CORE_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_user && \
+	if ADORE_CLI_BASE_IMAGE="adore_cli_base:$$ACTUAL_BASE_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_base; then \
+	    echo "✓ Base layer build successful"; \
+	else \
+	    echo "✗ Base layer build failed"; \
+	    echo ""; \
+	    echo "BUILD FAILURE - TROUBLESHOOTING STEPS:"; \
+	    echo "1. Check Docker daemon is running: docker info"; \
+	    echo "2. Check disk space: df -h"; \
+	    echo "3. Clean up Docker: docker system prune -f"; \
+	    echo "4. Try building base layer manually:"; \
+	    echo "   cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_base && make build"; \
+	    echo "5. If issues persist, check Docker logs: docker logs"; \
+	    exit 1; \
+	fi && \
+	if ADORE_CLI_BASE_IMAGE="adore_cli_base:$$ACTUAL_BASE_TAG" ADORE_CLI_CORE_IMAGE="adore_cli_core:$$ACTUAL_CORE_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_core; then \
+	    echo "✓ Core layer build successful"; \
+	else \
+	    echo "✗ Core layer build failed"; \
+	    echo ""; \
+	    echo "BUILD FAILURE - TROUBLESHOOTING STEPS:"; \
+	    echo "1. Check requirements files syntax in your project"; \
+	    echo "2. Try building core layer manually:"; \
+	    echo "   cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core && make build"; \
+	    echo "3. Check for invalid package names: make debug_requirements"; \
+	    echo "4. Clean and retry: make clean && make build"; \
+	    exit 1; \
+	fi && \
+	if ADORE_CLI_IMAGE="adore_cli:$$ACTUAL_USER_TAG" ADORE_CLI_CORE_IMAGE="adore_cli_core:$$ACTUAL_CORE_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_user; then \
+	    echo "✓ User layer build successful"; \
+	else \
+	    echo "✗ User layer build failed"; \
+	    echo ""; \
+	    echo "BUILD FAILURE - TROUBLESHOOTING STEPS:"; \
+	    echo "1. Check .deb packages in vendor/ directory"; \
+	    echo "2. Try building user layer manually:"; \
+	    echo "   cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli && make build"; \
+	    echo "3. Check package dependencies: make debug_packages"; \
+	    echo "4. Clean and retry: make clean && make build"; \
+	    exit 1; \
+	fi && \
 	ACTUAL_BASE_TAG="$$ACTUAL_BASE_TAG" ACTUAL_CORE_TAG="$$ACTUAL_CORE_TAG" ACTUAL_USER_TAG="$$ACTUAL_USER_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _save_built_tags
 	@echo "=========================="
 	@echo "=== Multi-layer build process complete ==="
 	@source "${ADORE_CLI_TEMP_DIR}/build_vars"; \
 	echo "Final image: adore_cli:$$ACTUAL_USER_TAG"
 	@echo ""
+	@echo "✓ BUILD SUCCESSFUL!"
+	@echo ""
 	@echo "Next steps:"
 	@echo "  Start development environment: make cli"
-	@echo "  View all ADOREe CLI specific  targets:    make help_cli"
+	@echo "  Run tests: make test"
+	@echo "  View all ADORe CLI targets: make help_cli"
+	@echo "  Check build status: make build_status"
+	@echo ""
+	@echo "If you encounter issues:"
+	@echo "  Debug information: make adore_cli_info"
+	@echo "  Force rebuild: make rebuild_force"
+	@echo "  Clean and rebuild: make clean && make build"
 
 .PHONY: build_adore_cli
 build_adore_cli: _build_adore_cli_layers ## Build The ADORe CLI Docker Context
+
+# === REBUILD TARGETS ===
+
+.PHONY: rebuild_force
+rebuild_force: ## Force rebuild all layers (ignore existing images and cache)
+	@echo "=== FORCE REBUILD: Removing all existing ADORe CLI images ==="
+	@echo "This will force rebuild all layers from scratch..."
+	@echo ""
+	@# Remove existing images to force rebuild
+	@docker rmi ${ADORE_CLI_IMAGE} 2>/dev/null || true
+	@docker rmi ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true  
+	@docker rmi ${ADORE_CLI_BASE_IMAGE} 2>/dev/null || true
+	@# Remove built tags to force regeneration
+	@rm -f "${BUILT_TAGS_FILE}"
+	@# Clean manifests to force regeneration
+	@rm -f "${REQUIREMENTS_MANIFEST}" "${PACKAGES_MANIFEST}"
+	@rm -f "${LAST_REQUIREMENTS_MANIFEST}" "${LAST_PACKAGES_MANIFEST}"
+	@echo "Removed existing images and cache files"
+	@echo "Starting complete rebuild..."
+	@echo ""
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers
+
+.PHONY: rebuild_from_layer
+rebuild_from_layer: ## Rebuild from specific layer onwards. Usage: make rebuild_from_layer LAYER=base|core|user
+	@if [ -z "$(LAYER)" ]; then \
+	    echo "ERROR: LAYER parameter required"; \
+	    echo "Usage: make rebuild_from_layer LAYER=base|core|user"; \
+	    echo ""; \
+	    echo "Examples:"; \
+	    echo "  make rebuild_from_layer LAYER=base   # Rebuild base, core, and user layers"; \
+	    echo "  make rebuild_from_layer LAYER=core   # Rebuild core and user layers"; \
+	    echo "  make rebuild_from_layer LAYER=user   # Rebuild only user layer"; \
+	    exit 1; \
+	fi
+	@echo "=== REBUILD FROM LAYER: $(LAYER) ==="
+	@case "$(LAYER)" in \
+	    base) \
+	        echo "Rebuilding from base layer (all layers will be rebuilt)"; \
+	        docker rmi ${ADORE_CLI_IMAGE} 2>/dev/null || true; \
+	        docker rmi ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true; \
+	        docker rmi ${ADORE_CLI_BASE_IMAGE} 2>/dev/null || true; \
+	        ;; \
+	    core) \
+	        echo "Rebuilding from core layer (core and user layers will be rebuilt)"; \
+	        docker rmi ${ADORE_CLI_IMAGE} 2>/dev/null || true; \
+	        docker rmi ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true; \
+	        ;; \
+	    user) \
+	        echo "Rebuilding user layer only"; \
+	        docker rmi ${ADORE_CLI_IMAGE} 2>/dev/null || true; \
+	        ;; \
+	    *) \
+	        echo "ERROR: Invalid layer '$(LAYER)'. Must be one of: base, core, user"; \
+	        exit 1; \
+	        ;; \
+	esac
+	@# Remove built tags to force regeneration for affected layers
+	@rm -f "${BUILT_TAGS_FILE}"
+	@echo "Starting rebuild from $(LAYER) layer..."
+	@echo ""
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers
 
 # === INTERNAL BUILD TARGETS ===
 
@@ -971,33 +1077,77 @@ _try_pull_core:
 .PHONY: help_cli
 help_cli: ## Show ADORe CLI help 
 	@echo "=== ADORe CLI Help ==="
-	@echo "=== ADORe CLI Multi-Layer Build Process ==="
-	@echo "Building ADORe CLI with three-layer architecture..."
-	@echo "Target architecture: ${ARCH}"
-	@echo "ADORe CLI branch: ${ADORE_CLI_BRANCH} (${ADORE_CLI_SHORT_HASH})"
-	@echo "ADORe CLI dirty: ${ADORE_CLI_IS_DIRTY}"
-	@echo "Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
-	@echo "Parent dirty: ${PARENT_IS_DIRTY}"
-	@echo "Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
-	@echo "User: ${USER} (UID: ${UID}, GID: ${GID})"
+	@echo ""
+	@echo "ADORe CLI uses a three-layer Docker architecture for efficient builds:"
+	@echo "  Target architecture: ${ARCH}"
+	@echo "  ADORe CLI branch: ${ADORE_CLI_BRANCH} (${ADORE_CLI_SHORT_HASH})"
+	@echo "  Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
+	@echo "  Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "  User: ${USER} (UID: ${UID}, GID: ${GID})"
 	@echo ""
 	@echo "Build strategy:"
-	@echo "  1. Base layer:  Try registry pull → Use cache → Build locally"
-	@echo "  2. Core layer:  Try registry pull → Use cache → Build locally"
-	@echo "  3. User layer:  Use cache → Build locally (never pulled)"
+	@echo "  1. Base layer:  OS + ROS2 foundation (highly cacheable)"
+	@echo "  2. Core layer:  Complete environment + dependencies (shareable)"
+	@echo "  3. User layer:  User customization + packages (user-specific)"
 	@echo ""
 	@echo "=== Main User Targets ==="
-	@echo "  build              Build complete ADORe CLI environment (recommended)"
-	@echo "  cli                Start/attach to ADORe CLI (auto-builds ADORe CLI if needed, does not build nodes, libraries or vendor libraries)"
+	@echo "  build              Build complete ADORe CLI environment (recommended first step)"
+	@echo "  cli                Start/attach to ADORe CLI (auto-builds if needed)"
+	@echo "  start              Start ADORe CLI in background"
+	@echo "  stop               Stop ADORe CLI container"
+	@echo "  run cmd=\"...\"       Execute command in ADORe CLI"
 	@echo "  clean              Clean all images and build artifacts"
 	@echo "  test               Run test suite"
-	@echo "  help_cli           Show this help message"
-	@echo "  adore_cli_info     Show current configuration"
-	@echo "  build_status       Show status of all build layers"
 	@echo ""
-	@echo "=== Advanced Targets ==="
+	@echo "=== Build and Debug Targets ==="
+	@echo "  rebuild_force      Force rebuild all layers (ignore cache)"
+	@echo "  rebuild_from_layer LAYER=base|core|user  Rebuild from specific layer"
+	@echo "  build_status       Show status of all build layers"
+	@echo "  adore_cli_info     Show current configuration"
 	@echo "  debug_run          Launch interactive bash shell in user image"
 	@echo "  debug_run_root     Launch interactive bash shell as root"
-	@echo "  rebuild_force      Force rebuild all layers (ignore existing images)"
+	@echo ""
+	@echo "=== Registry Targets ==="
+	@echo "  registry_status    Check availability of images in registry"
+	@echo "  try_pull_base_images  Attempt to pull base/core from registry"
+	@echo "  push_base_images   Push base/core images to registry"
+	@echo ""
+	@echo "=== Information Targets ==="
+	@echo "  help_cli           Show this help message"
+	@echo "  image_adore_cli    Show current user image name"
+	@echo "  images_adore_cli   Show all image names"
+	@echo "  container_name_adore_cli  Show container name"
+	@echo "  branch_adore_cli   Show current tag"
+	@echo ""
+	@echo "=== Common Workflows ==="
+	@echo ""
+	@echo "First Time Setup:"
+	@echo "  1. make build      # Build all layers"
+	@echo "  2. make cli        # Start development environment"
+	@echo ""
+	@echo "Daily Development:"
+	@echo "  - make cli         # Start/attach to environment"
+	@echo "  - make stop        # Stop when done"
+	@echo ""
+	@echo "When Requirements Change:"
+	@echo "  - make build       # Rebuild affected layers automatically"
+	@echo "  - make cli         # Start with new environment"
+	@echo ""
+	@echo "Troubleshooting Build Issues:"
+	@echo "  1. make build_status          # Check which layers exist"
+	@echo "  2. make adore_cli_info        # Show configuration"
+	@echo "  3. make rebuild_force         # Force complete rebuild"
+	@echo "  4. make rebuild_from_layer LAYER=core  # Rebuild from core layer"
+	@echo "  5. docker system prune -f    # Clean Docker cache if space issues"
+	@echo ""
+	@echo "Partial Rebuilds:"
+	@echo "  - make rebuild_from_layer LAYER=base   # Rebuild all layers"
+	@echo "  - make rebuild_from_layer LAYER=core   # Rebuild core + user"
+	@echo "  - make rebuild_from_layer LAYER=user   # Rebuild user layer only"
+	@echo ""
+	@echo "=== Getting Help ==="
+	@echo "  For build failures: Check error messages and try troubleshooting steps above"
+	@echo "  For runtime issues: make adore_cli_info to check configuration"
+	@echo "  For Docker issues: Ensure Docker daemon is running and has sufficient space"
 
 endif
