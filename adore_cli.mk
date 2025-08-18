@@ -7,17 +7,6 @@ SHELL := /bin/bash
 MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
 .NOTPARALLEL:
 
-# === IMMEDIATE USER IDENTIFICATION ===
-override UID := $(strip $(shell id -u))
-override GID := $(strip $(shell id -g))
-override USER := $(strip $(shell whoami))
-
-# Validate they're not empty
-$(if $(UID),,$(error "Cannot determine UID"))
-$(if $(GID),,$(error "Cannot determine GID"))  
-$(if $(USER),,$(error "Cannot determine USER"))
-
-
 # Get the adore_cli makefile path
 ADORE_CLI_MAKEFILE_PATH := $(shell dirname "$(realpath $(lastword $(MAKEFILE_LIST)))")
 
@@ -88,55 +77,51 @@ LAST_PACKAGES_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/last_packages_manife
 # === TAG STATE FILES ===
 BUILT_TAGS_FILE:=${SOURCE_DIRECTORY}/.log/.adore_cli/built_tags
 ADORE_CLI_TEMP_DIR:=${SOURCE_DIRECTORY}/.log/.adore_cli/temp
-TAG_HISTORY_SCRIPT:=${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh
+TAG_HISTORY_MANAGER:=${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh
 
 # === CORE TAGGING LOGIC ===
-# Force immediate evaluation to ensure UID/GID are available and properly trimmed
-USER_TAG_UID_GID := UID$(UID)GID$(GID)
-
-# Base tags (always use adore_cli repo info) - trim any whitespace
-ADORE_CLI_BASE_TAG_CLEAN:=$(shell echo "${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}" | tr -d ' \t\n\r')
+# Base tags (always use adore_cli repo info)
+ADORE_CLI_BASE_TAG_CLEAN:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
 ifeq ($(ADORE_CLI_IS_DIRTY),true)
-    ADORE_CLI_BASE_TAG_DEFAULT:=$(shell echo "${ADORE_CLI_BASE_TAG_CLEAN}_dirty" | tr -d ' \t\n\r')
+    ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}_dirty
 else
-    ADORE_CLI_BASE_TAG_DEFAULT:=$(shell echo "${ADORE_CLI_BASE_TAG_CLEAN}" | tr -d ' \t\n\r')
+    ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}
 endif
 
-# Core image tagging according to requirements (using uppercase RH) - trim any whitespace
+# Core image tagging according to requirements (using uppercase RH)
 ifeq ($(PARENT_IS_ADORE_CLI),true)
-    ADORE_CLI_CORE_TAG_DEFAULT:=$(shell echo "${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}" | tr -d ' \t\n\r')
+    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
 else
-    ADORE_CLI_CORE_TAG_DEFAULT:=$(shell echo "${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_SHORT_HASH}" | tr -d ' \t\n\r')
+    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_SHORT_HASH}
 endif
 
-# User image tagging with package hash, username, UID and GID (using uppercase PH) - trim any whitespace
+# User image tagging with package hash, username, UID and GID (using uppercase PH)
 ifeq ($(PARENT_IS_ADORE_CLI),true)
-    ADORE_CLI_USER_TAG_DEFAULT:=$(shell echo "${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${USER}_${USER_TAG_UID_GID}" | tr -d ' \t\n\r')
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${USER}_UID${UID}GID${GID}
 else
-    ADORE_CLI_USER_TAG_DEFAULT:=$(shell echo "${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_PH${PACKAGES_SHORT_HASH}_${USER}_${USER_TAG_UID_GID}" | tr -d ' \t\n\r')
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_PH${PACKAGES_SHORT_HASH}_${USER}_UID${UID}GID${GID}
 endif
 
-# Validate that the final tag doesn't contain empty UID/GID
-ifeq ($(findstring UIDGID,$(ADORE_CLI_USER_TAG_DEFAULT)),UIDGID)
-$(error "ERROR: User tag contains empty UID/GID: $(ADORE_CLI_USER_TAG_DEFAULT)")
-endif
+# Use default tags for runtime (simplified - no complex built tag logic)
+ADORE_CLI_BASE_TAG:=${ADORE_CLI_BASE_TAG_DEFAULT}
+ADORE_CLI_CORE_TAG:=${ADORE_CLI_CORE_TAG_DEFAULT}
+ADORE_CLI_TAG:=${ADORE_CLI_USER_TAG_DEFAULT}
 
-# Use default tags for runtime (will be overridden by smart selection)
-# Allow environment variables to override makefile defaults (for runtime tag switching)
-ADORE_CLI_BASE_TAG := $(or $(ADORE_CLI_BASE_TAG),${ADORE_CLI_BASE_TAG_DEFAULT})
-ADORE_CLI_CORE_TAG := $(or $(ADORE_CLI_CORE_TAG),${ADORE_CLI_CORE_TAG_DEFAULT})
-ADORE_CLI_TAG := $(or $(ADORE_CLI_TAG),${ADORE_CLI_USER_TAG_DEFAULT})
-
-ADORE_CLI_BASE_IMAGE := $(or $(ADORE_CLI_BASE_IMAGE),adore_cli_base:${ADORE_CLI_BASE_TAG})
-ADORE_CLI_CORE_IMAGE := $(or $(ADORE_CLI_CORE_IMAGE),adore_cli_core:${ADORE_CLI_CORE_TAG})
-ADORE_CLI_IMAGE := $(or $(ADORE_CLI_IMAGE),adore_cli:${ADORE_CLI_TAG})
-ADORE_CLI_CONTAINER_NAME := $(or $(ADORE_CLI_CONTAINER_NAME),adore_cli_${ADORE_CLI_TAG})
+ADORE_CLI_BASE_IMAGE:=adore_cli_base:${ADORE_CLI_BASE_TAG}
+ADORE_CLI_CORE_IMAGE:=adore_cli_core:${ADORE_CLI_CORE_TAG}
+ADORE_CLI_IMAGE:=adore_cli:${ADORE_CLI_TAG}
+ADORE_CLI_CONTAINER_NAME:=adore_cli_${ADORE_CLI_TAG}
 
 # === DIRECTORY CONFIGURATION ===
 SOURCE_DIRECTORY?=${REPO_DIRECTORY}
 ADORE_CLI_WORKING_DIRECTORY?=${SOURCE_DIRECTORY}
 DOCKER_COMPOSE_FILE?=${ADORE_CLI_MAKEFILE_PATH}/docker-compose.yaml
 REPO_DIRECTORY:=${ADORE_CLI_MAKEFILE_PATH}
+
+# === USER CONFIGURATION ===
+UID := $(shell id -u)
+GID := $(shell id -g)
+ADORE_TAG ?= $(ADORE_CLI_TAG)
 
 # === INCLUDES ===
 include ${MAKE_GADGETS_PATH}/make_gadgets.mk
@@ -177,49 +162,79 @@ _save_manifests:
 
 .PHONY: _check_requirements_manifest_changed
 _check_requirements_manifest_changed:
-	@if [ -f "${REQUIREMENTS_MANIFEST}" ] && [ -f "${LAST_REQUIREMENTS_MANIFEST}" ]; then \
-		if ! cmp -s "${REQUIREMENTS_MANIFEST}" "${LAST_REQUIREMENTS_MANIFEST}"; then \
-			echo "true"; \
+	@# Compare current filesystem directly against last saved manifest
+	@# Step 1: Generate current state in temp file
+	@TEMP_CURRENT="/tmp/current_req_$$$$"; \
+	find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) \
+		! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | \
+	xargs -r sha256sum 2>/dev/null | sort > "$$TEMP_CURRENT"; \
+	if [ -f "${LAST_REQUIREMENTS_MANIFEST}" ]; then \
+		if ! cmp -s "$$TEMP_CURRENT" "${LAST_REQUIREMENTS_MANIFEST}"; then \
+			echo "DEBUG: Requirements changed detected!" >&2; \
+			echo "DEBUG: Current filesystem differs from last saved manifest" >&2; \
+			rm -f "$$TEMP_CURRENT"; echo "true"; \
 		else \
-			echo "false"; \
+			echo "DEBUG: No requirements changes detected" >&2; \
+			rm -f "$$TEMP_CURRENT"; echo "false"; \
 		fi; \
 	else \
-		echo "true"; \
+		echo "DEBUG: No last manifest found, assuming changed" >&2; \
+		rm -f "$$TEMP_CURRENT"; echo "true"; \
 	fi
 
-.PHONY: _check_packages_manifest_changed
+.PHONY: _check_packages_manifest_changed  
 _check_packages_manifest_changed:
-	@if [ -f "${PACKAGES_MANIFEST}" ] && [ -f "${LAST_PACKAGES_MANIFEST}" ]; then \
-		if ! cmp -s "${PACKAGES_MANIFEST}" "${LAST_PACKAGES_MANIFEST}"; then \
-			echo "true"; \
+	@# Generate temporary manifest and compare with last saved manifest
+	@TEMP_MANIFEST="/tmp/temp_pkg_manifest_$$$$"; \
+	if [ -d "${VENDOR_PATH}" ]; then \
+		find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | \
+		sort | xargs -r -I {} basename {} 2>/dev/null | \
+		sort | sha256sum > "$$TEMP_MANIFEST"; \
+	else \
+		touch "$$TEMP_MANIFEST"; \
+	fi; \
+	if [ -f "${LAST_PACKAGES_MANIFEST}" ]; then \
+		if ! cmp -s "$$TEMP_MANIFEST" "${LAST_PACKAGES_MANIFEST}"; then \
+			rm -f "$$TEMP_MANIFEST"; echo "true"; \
 		else \
-			echo "false"; \
+			rm -f "$$TEMP_MANIFEST"; echo "false"; \
 		fi; \
 	else \
-		echo "true"; \
+		rm -f "$$TEMP_MANIFEST"; echo "true"; \
 	fi
+
+.PHONY: _save_built_tags
+_save_built_tags:
+	@echo "Saving built image tags..."
+	@mkdir -p "$(shell dirname ${BUILT_TAGS_FILE})"
+	@echo "BASE=${ACTUAL_BASE_TAG}" > "${BUILT_TAGS_FILE}"
+	@echo "CORE=${ACTUAL_CORE_TAG}" >> "${BUILT_TAGS_FILE}"
+	@echo "USER=${ACTUAL_USER_TAG}" >> "${BUILT_TAGS_FILE}"
+	@echo "Built tags saved to: ${BUILT_TAGS_FILE}"
+	@echo "Contents:"
+	@cat "${BUILT_TAGS_FILE}"
 
 .PHONY: _determine_actual_build_tags
-_determine_actual_build_tags: _generate_requirements_manifest _generate_packages_manifest
-	@echo "Determining actual build tags based on requirements and package changes..."
+_determine_actual_build_tags:
+	@echo "=== Checking for changes BEFORE regenerating manifests ==="
 	@mkdir -p "${ADORE_CLI_TEMP_DIR}"
+	@REQUIREMENTS_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_requirements_manifest_changed); \
+	PACKAGES_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_packages_manifest_changed); \
+	echo "Requirements changed: $$REQUIREMENTS_CHANGED"; \
+	echo "Packages changed: $$PACKAGES_CHANGED"
+	@echo "Determining actual build tags based on requirements and package changes..."
 	@echo "=== Tag Determination Logic ==="
 	@echo "Parent is ADORe CLI: ${PARENT_IS_ADORE_CLI}"
 	@echo "Parent repo dirty: ${PARENT_IS_DIRTY}"
 	@echo "Requirements short hash: ${REQUIREMENTS_SHORT_HASH}"
 	@echo "Packages short hash: ${PACKAGES_SHORT_HASH}"
-	@echo "User: ${USER} (UID: ${UID}, GID: ${GID})"
-	@# Validate UID and GID are not empty
-	@if [ -z "${UID}" ] || [ -z "${GID}" ]; then \
-	    echo "ERROR: UID or GID is empty. UID=${UID}, GID=${GID}"; \
-	    exit 1; \
-	fi
+	@echo "User: ${USER}"
 	@REQUIREMENTS_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_requirements_manifest_changed); \
 	PACKAGES_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_packages_manifest_changed); \
 	echo "Requirements manifest changed: $$REQUIREMENTS_CHANGED"; \
 	echo "Packages manifest changed: $$PACKAGES_CHANGED"; \
-	ACTUAL_BASE_TAG="$$(echo "${ADORE_CLI_BASE_TAG_DEFAULT}" | tr -d ' \t\n\r')"; \
-	CORE_BASE_TAG="$$(echo "${ADORE_CLI_CORE_TAG_DEFAULT}" | tr -d ' \t\n\r')"; \
+	ACTUAL_BASE_TAG="${ADORE_CLI_BASE_TAG_DEFAULT}"; \
+	CORE_BASE_TAG="${ADORE_CLI_CORE_TAG_DEFAULT}"; \
 	if [ "$$REQUIREMENTS_CHANGED" = "true" ] || [ "${PARENT_IS_DIRTY}" = "true" ]; then \
 	    echo "→ Requirements changed or parent dirty → rebuilding core layer"; \
 	    ACTUAL_CORE_TAG="$${CORE_BASE_TAG}_dirty"; \
@@ -227,23 +242,17 @@ _determine_actual_build_tags: _generate_requirements_manifest _generate_packages
 	    echo "→ No requirements changes → using clean core tag"; \
 	    ACTUAL_CORE_TAG="$$CORE_BASE_TAG"; \
 	fi; \
-	USER_BASE_TAG="$$(echo "${ADORE_CLI_USER_TAG_DEFAULT}" | tr -d ' \t\n\r')"; \
+	USER_BASE_TAG="${ADORE_CLI_USER_TAG_DEFAULT}"; \
 	if [ "$$PACKAGES_CHANGED" = "true" ]; then \
 	    echo "→ Packages changed → rebuilding user layer with current package hash"; \
-	    ACTUAL_USER_TAG="$$USER_BASE_TAG"; \
+	    ACTUAL_USER_TAG="$${USER_BASE_TAG}"; \
 	else \
 	    echo "→ No package changes → using clean user tag with package hash"; \
 	    ACTUAL_USER_TAG="$$USER_BASE_TAG"; \
 	fi; \
-	echo "Validating final tags..."; \
-	if echo "$$ACTUAL_USER_TAG" | grep -q "UIDGID"; then \
-	    echo "ERROR: User tag contains empty UID/GID: $$ACTUAL_USER_TAG"; \
-	    echo "UID=${UID}, GID=${GID}, USER=${USER}"; \
-	    exit 1; \
-	fi; \
-	printf "ACTUAL_BASE_TAG=%s\n" "$$ACTUAL_BASE_TAG" > "${ADORE_CLI_TEMP_DIR}/build_vars"; \
-	printf "ACTUAL_CORE_TAG=%s\n" "$$ACTUAL_CORE_TAG" >> "${ADORE_CLI_TEMP_DIR}/build_vars"; \
-	printf "ACTUAL_USER_TAG=%s\n" "$$ACTUAL_USER_TAG" >> "${ADORE_CLI_TEMP_DIR}/build_vars"; \
+	echo "ACTUAL_BASE_TAG=$$ACTUAL_BASE_TAG" > "${ADORE_CLI_TEMP_DIR}/build_vars"; \
+	echo "ACTUAL_CORE_TAG=$$ACTUAL_CORE_TAG" >> "${ADORE_CLI_TEMP_DIR}/build_vars"; \
+	echo "ACTUAL_USER_TAG=$$ACTUAL_USER_TAG" >> "${ADORE_CLI_TEMP_DIR}/build_vars"; \
 	echo "=== Final Image Tags ==="; \
 	echo "  Base: adore_cli_base:$$ACTUAL_BASE_TAG"; \
 	echo "  Core: adore_cli_core:$$ACTUAL_CORE_TAG"; \
@@ -276,231 +285,123 @@ check_cross_compile_deps: check_docker_version
 	    export DOCKER_BUILDX=1; \
 	fi
 
-# === TAG HISTORY AND ENVIRONMENT MANAGEMENT ===
+# === ENVIRONMENT CHANGE DETECTION ===
 
-.PHONY: _smart_environment_selection
-_smart_environment_selection: _determine_actual_build_tags
-	@echo "=== Smart Environment Selection ==="
-	@echo "Current state:"
-	@echo "  Base tag: ${ADORE_CLI_BASE_TAG_DEFAULT}"
-	@echo "  Core tag: ${ADORE_CLI_CORE_TAG_DEFAULT}"  
-	@echo "  User tag: ${ADORE_CLI_USER_TAG_DEFAULT}"
+.PHONY: _check_environment_changes
+_check_environment_changes: _determine_actual_build_tags
+	@echo "=== Environment Change Detection ==="
 	@source "${ADORE_CLI_TEMP_DIR}/build_vars" && \
-	ACTUAL_BASE_TAG="$$(echo "$$ACTUAL_BASE_TAG" | tr -d ' \t\n\r')" && \
-	ACTUAL_CORE_TAG="$$(echo "$$ACTUAL_CORE_TAG" | tr -d ' \t\n\r')" && \
-	ACTUAL_USER_TAG="$$(echo "$$ACTUAL_USER_TAG" | tr -d ' \t\n\r')" && \
-	LAST_USER_TAG=$$(SOURCE_DIRECTORY="${SOURCE_DIRECTORY}" bash "${TAG_HISTORY_SCRIPT}" get_last 2>/dev/null || echo ""); \
-	if [ -n "$$LAST_USER_TAG" ]; then \
-	    echo "Last successful: $$LAST_USER_TAG"; \
-	    if [ "$$LAST_USER_TAG" = "$$ACTUAL_USER_TAG" ]; then \
-	        echo "Calculated tag matches last successful environment"; \
-	        if SOURCE_DIRECTORY="${SOURCE_DIRECTORY}" bash "${TAG_HISTORY_SCRIPT}" check_exists "$$ACTUAL_USER_TAG"; then \
-	            echo "Environment exists, using current configuration"; \
-	            echo "use_current" > "${ADORE_CLI_TEMP_DIR}/env_action"; \
-	        else \
-	            echo "Environment missing, will build"; \
-	            echo "build_missing" > "${ADORE_CLI_TEMP_DIR}/env_action"; \
-	        fi; \
-	    else \
-	        echo "Tags differ, checking for changes..."; \
-	        CHANGE_REASON="Tag calculation changed"; \
-	        if [ "$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_requirements_manifest_changed)" = "true" ]; then \
-	            CHANGE_REASON="Requirements files changed"; \
-	        elif [ "$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_packages_manifest_changed)" = "true" ]; then \
-	            CHANGE_REASON="Package files changed"; \
-	        elif [ "${PARENT_IS_DIRTY}" = "true" ]; then \
-	            CHANGE_REASON="Git repository has uncommitted changes"; \
-	        fi; \
-	        echo "Change reason: $$CHANGE_REASON"; \
-	        ACTION=$$(SOURCE_DIRECTORY="${SOURCE_DIRECTORY}" bash "${TAG_HISTORY_SCRIPT}" check_changes \
-	            "$$LAST_USER_TAG" "" "$$LAST_USER_TAG" \
-	            "$$ACTUAL_BASE_TAG" "$$ACTUAL_CORE_TAG" "$$ACTUAL_USER_TAG" \
-	            "$$CHANGE_REASON"); \
-	        if [ -z "$$ACTION" ]; then \
-	            echo "ERROR: No action returned from tag history manager"; \
-	            exit 1; \
-	        fi; \
-	        echo "$$ACTION" > "${ADORE_CLI_TEMP_DIR}/env_action"; \
-	    fi; \
+	CALCULATED_USER_TAG="$$ACTUAL_USER_TAG" && \
+	echo "Calculated user tag: $$CALCULATED_USER_TAG" && \
+	LAST_SUCCESSFUL_TAG=$$(bash "${TAG_HISTORY_MANAGER}" get_last 2>/dev/null || echo "") && \
+	echo "Last successful tag: $$LAST_SUCCESSFUL_TAG" && \
+	if [[ -z "$$LAST_SUCCESSFUL_TAG" ]]; then \
+		echo "No previous environment found, building new one"; \
+		make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action ACTION=build_new FINAL_TAG="$$CALCULATED_USER_TAG"; \
 	else \
-	    echo "No previous successful environment found"; \
-	    if SOURCE_DIRECTORY="${SOURCE_DIRECTORY}" bash "${TAG_HISTORY_SCRIPT}" check_exists "$$ACTUAL_USER_TAG"; then \
-	        echo "Calculated environment exists, will use it"; \
-	        echo "use_current" > "${ADORE_CLI_TEMP_DIR}/env_action"; \
-	    else \
-	        echo "No existing environment found, will build new one"; \
-	        echo "build_new" > "${ADORE_CLI_TEMP_DIR}/env_action"; \
-	    fi; \
+		echo "Checking for environment changes..."; \
+		ACTION=$$(SOURCE_DIRECTORY="${SOURCE_DIRECTORY}" bash "${TAG_HISTORY_MANAGER}" check_changes "$$LAST_SUCCESSFUL_TAG" "$$CALCULATED_USER_TAG"); \
+		echo "Environment decision: $$ACTION"; \
+		case "$$ACTION" in \
+			use_current) \
+				make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action ACTION=use_current FINAL_TAG="$$CALCULATED_USER_TAG"; \
+				;; \
+			use_last_successful) \
+				make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action ACTION=use_current FINAL_TAG="$$LAST_SUCCESSFUL_TAG"; \
+				;; \
+			*) \
+				make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action ACTION="$$ACTION" FINAL_TAG="$$CALCULATED_USER_TAG"; \
+				;; \
+		esac; \
 	fi
-	@echo "Environment selection complete"
 
-.PHONY: _execute_environment_action  
-_execute_environment_action: _smart_environment_selection
+.PHONY: _execute_environment_action
+_execute_environment_action:
 	@echo "=== Executing Environment Action ==="
-	@if [ ! -f "${ADORE_CLI_TEMP_DIR}/env_action" ]; then \
-	    echo "ERROR: No environment action determined"; \
-	    exit 1; \
-	fi
-	@ACTION=$$(cat "${ADORE_CLI_TEMP_DIR}/env_action" | tr -d ' \t\n\r'); \
-	if [ -z "$$ACTION" ]; then \
-	    echo "ERROR: Environment action is empty"; \
-	    exit 1; \
-	fi; \
-	echo "Action: $$ACTION"; \
-	case "$$ACTION" in \
-	    use_current) \
-	        echo "Using current environment configuration"; \
-	        source "${ADORE_CLI_TEMP_DIR}/build_vars" && \
-	        ACTUAL_BASE_TAG="$$(echo "$$ACTUAL_BASE_TAG" | tr -d ' \t\n\r')" && \
-	        ACTUAL_CORE_TAG="$$(echo "$$ACTUAL_CORE_TAG" | tr -d ' \t\n\r')" && \
-	        ACTUAL_USER_TAG="$$(echo "$$ACTUAL_USER_TAG" | tr -d ' \t\n\r')" && \
-	        printf "FINAL_BASE_TAG=%s\n" "$$ACTUAL_BASE_TAG" > "${ADORE_CLI_TEMP_DIR}/final_tags" && \
-	        printf "FINAL_CORE_TAG=%s\n" "$$ACTUAL_CORE_TAG" >> "${ADORE_CLI_TEMP_DIR}/final_tags" && \
-	        printf "FINAL_USER_TAG=%s\n" "$$ACTUAL_USER_TAG" >> "${ADORE_CLI_TEMP_DIR}/final_tags"; \
-	        ;; \
-	    build_missing|build_new) \
-	        echo "Building new environment..."; \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers_smart; \
-	        ;; \
-	    abort) \
-	        echo "User aborted operation"; \
-	        exit 1; \
-	        ;; \
-	    *) \
-	        echo "ERROR: Unknown action: $$ACTION"; \
-	        exit 1; \
-	        ;; \
+	@echo "Action: ${ACTION}"
+	@echo "Final tag: ${FINAL_TAG}"
+	@case "${ACTION}" in \
+		use_current) \
+			echo "Using environment: ${FINAL_TAG}"; \
+			if docker image inspect "adore_cli:${FINAL_TAG}" >/dev/null 2>&1; then \
+				echo "Environment exists, starting container"; \
+				ADORE_CLI_TAG="${FINAL_TAG}" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _start_and_attach_interactive; \
+			else \
+				echo "Environment missing, building first"; \
+				make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_and_start_new_environment; \
+			fi; \
+			;; \
+		build_new|build_missing) \
+			echo "Building new environment..."; \
+			make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_and_start_new_environment; \
+			;; \
+		abort) \
+			echo "User aborted operation"; \
+			exit 1; \
+			;; \
+		*) \
+			echo "Invalid action: ${ACTION}"; \
+			exit 1; \
+			;; \
 	esac
-	@echo "Environment action completed"
-
-.PHONY: _build_adore_cli_layers_smart
-_build_adore_cli_layers_smart: 
-	@echo "=== Smart ADORe CLI Build Process ==="
-	@source "${ADORE_CLI_TEMP_DIR}/build_vars" && \
-	ACTUAL_BASE_TAG="$$(echo "$$ACTUAL_BASE_TAG" | tr -d ' \t\n\r')" && \
-	ACTUAL_CORE_TAG="$$(echo "$$ACTUAL_CORE_TAG" | tr -d ' \t\n\r')" && \
-	ACTUAL_USER_TAG="$$(echo "$$ACTUAL_USER_TAG" | tr -d ' \t\n\r')" && \
-	echo "Building with determined tags:" && \
-	echo "  Base: adore_cli_base:$$ACTUAL_BASE_TAG" && \
-	echo "  Core: adore_cli_core:$$ACTUAL_CORE_TAG" && \
-	echo "  User: adore_cli:$$ACTUAL_USER_TAG" && \
-	ADORE_CLI_BASE_IMAGE="adore_cli_base:$$ACTUAL_BASE_TAG" \
-	ADORE_CLI_CORE_IMAGE="adore_cli_core:$$ACTUAL_CORE_TAG" \
-	ADORE_CLI_IMAGE="adore_cli:$$ACTUAL_USER_TAG" \
-	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers_internal && \
-	echo "Saving successful environment to history..." && \
-	SOURCE_DIRECTORY="${SOURCE_DIRECTORY}" bash "${TAG_HISTORY_SCRIPT}" save "$$ACTUAL_BASE_TAG" "$$ACTUAL_CORE_TAG" "$$ACTUAL_USER_TAG" && \
-	printf "FINAL_BASE_TAG=%s\n" "$$ACTUAL_BASE_TAG" > "${ADORE_CLI_TEMP_DIR}/final_tags" && \
-	printf "FINAL_CORE_TAG=%s\n" "$$ACTUAL_CORE_TAG" >> "${ADORE_CLI_TEMP_DIR}/final_tags" && \
-	printf "FINAL_USER_TAG=%s\n" "$$ACTUAL_USER_TAG" >> "${ADORE_CLI_TEMP_DIR}/final_tags"
-
-.PHONY: _build_adore_cli_layers_internal
-_build_adore_cli_layers_internal: check_cross_compile_deps
-	@echo "=== ADORe CLI Multi-Layer Build Process ==="
-	@echo "Building ADORe CLI with three-layer architecture..."
-	@echo "Target architecture: ${ARCH}"
-	@echo "Build strategy:"
-	@echo "  1. Base layer:  Try registry pull → Use cache → Build locally"
-	@echo "  2. Core layer:  Try registry pull → Use cache → Build locally"
-	@echo "  3. User layer:  Use cache → Build locally (never pulled)"
-	@echo ""
-	@echo "Starting build process..."
-	@echo "=========================="
-	@if make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_base; then \
-	    echo "✓ Base layer build successful"; \
-	else \
-	    echo "✗ Base layer build failed"; \
-	    exit 1; \
-	fi && \
-	if make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_core; then \
-	    echo "✓ Core layer build successful"; \
-	else \
-	    echo "✗ Core layer build failed"; \
-	    exit 1; \
-	fi && \
-	if make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_user; then \
-	    echo "✓ User layer build successful"; \
-	else \
-	    echo "✗ User layer build failed"; \
-	    exit 1; \
-	fi
-	@echo "=========================="
-	@echo "=== Multi-layer build process complete ==="
-	@echo "✓ BUILD SUCCESSFUL!"
-
-.PHONY: _update_runtime_tags
-_update_runtime_tags: _execute_environment_action
-	@echo "=== Updating Runtime Tags ==="
-	@if [ ! -f "${ADORE_CLI_TEMP_DIR}/final_tags" ]; then \
-	    echo "ERROR: No final tags determined"; \
-	    exit 1; \
-	fi
-	@source "${ADORE_CLI_TEMP_DIR}/final_tags" && \
-	FINAL_BASE_TAG="$$(echo "$$FINAL_BASE_TAG" | tr -d ' \t\n\r')" && \
-	FINAL_CORE_TAG="$$(echo "$$FINAL_CORE_TAG" | tr -d ' \t\n\r')" && \
-	FINAL_USER_TAG="$$(echo "$$FINAL_USER_TAG" | tr -d ' \t\n\r')" && \
-	echo "Final runtime tags:" && \
-	echo "  Base: adore_cli_base:$$FINAL_BASE_TAG" && \
-	echo "  Core: adore_cli_core:$$FINAL_CORE_TAG" && \
-	echo "  User: adore_cli:$$FINAL_USER_TAG" && \
-	printf "export RUNTIME_BASE_TAG=\"%s\"\n" "$$FINAL_BASE_TAG" > "${ADORE_CLI_TEMP_DIR}/runtime_vars" && \
-	printf "export RUNTIME_CORE_TAG=\"%s\"\n" "$$FINAL_CORE_TAG" >> "${ADORE_CLI_TEMP_DIR}/runtime_vars" && \
-	printf "export RUNTIME_USER_TAG=\"%s\"\n" "$$FINAL_USER_TAG" >> "${ADORE_CLI_TEMP_DIR}/runtime_vars" && \
-	echo "Runtime tags updated"
-
-# === MAIN CLI TARGET ===
-
-.PHONY: cli 
-cli: docker_host_context_check _cli_smart_attach ## Start ADORe CLI docker context or attach to it if it is already running
-
-.PHONY: _cli_smart_attach
-_cli_smart_attach: _update_runtime_tags
-	@echo "=== ADORe CLI Smart Attach ==="
-	@source "${ADORE_CLI_TEMP_DIR}/runtime_vars" && \
-	RUNTIME_USER_TAG="$$(echo "$$RUNTIME_USER_TAG" | tr -d ' \t\n\r')" && \
-	RUNTIME_IMAGE="adore_cli:$$RUNTIME_USER_TAG" && \
-	RUNTIME_CONTAINER="adore_cli_$$RUNTIME_USER_TAG" && \
-	echo "Target container: $$RUNTIME_CONTAINER" && \
-	echo "Target image: $$RUNTIME_IMAGE" && \
-	echo "" && \
-	if docker ps --format "{{.Names}}" | grep -q "^$$RUNTIME_CONTAINER$$"; then \
-	    echo "✓ Container $$RUNTIME_CONTAINER is already running"; \
-	    echo "Attaching to existing session..."; \
-	    echo "Type 'exit' to detach from container (container will continue running)"; \
-	    echo "Use 'make stop' to stop the container"; \
-	    echo ""; \
-	    docker exec -it "$$RUNTIME_CONTAINER" /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
-	    echo ""; \
-	    echo "Detached from container. Container is still running."; \
-	    echo "Use 'make cli' to reattach or 'make stop' to stop it."; \
-	elif docker ps -a --format "{{.Names}}" | grep -q "^$$RUNTIME_CONTAINER$$"; then \
-	    echo "Container $$RUNTIME_CONTAINER exists but is stopped"; \
-	    echo "Starting existing container..."; \
-	    docker start "$$RUNTIME_CONTAINER"; \
-	    echo "Attaching to restarted container..."; \
-	    docker exec -it "$$RUNTIME_CONTAINER" /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
-	else \
-	    echo "No existing container found with name: $$RUNTIME_CONTAINER"; \
-	    if ! docker image inspect "$$RUNTIME_IMAGE" >/dev/null 2>&1; then \
-	        echo "ERROR: Required user image not found: $$RUNTIME_IMAGE"; \
-	        echo "This should not happen after smart environment selection"; \
-	        exit 1; \
-	    fi; \
-	    export ADORE_CLI_IMAGE="$$RUNTIME_IMAGE" && \
-	    export ADORE_CLI_CONTAINER_NAME="$$RUNTIME_CONTAINER" && \
-	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _start_and_attach_interactive; \
-	fi
 
 .PHONY: _start_and_attach_interactive
-_start_and_attach_interactive: adore_cli_setup adore_cli_start
+_start_and_attach_interactive: adore_cli_setup 
+	@echo "Starting environment with tag: ${ADORE_CLI_TAG}"
+	@ADORE_CLI_TAG="${ADORE_CLI_TAG}" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_start
 	@echo "Container started. Attaching to interactive session..."
 	@echo "Type 'exit' to detach from container (container will continue running)"
 	@echo "Use 'make cli' to reattach or 'make stop' to stop the container"
 	@echo ""
-	@docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"
+	@ADORE_CLI_CONTAINER_NAME="adore_cli_${ADORE_CLI_TAG}" docker exec -it "adore_cli_${ADORE_CLI_TAG}" /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"
 	@echo ""
 	@echo "Detached from container. Container is still running."
 	@echo "Use 'make cli' to reattach or 'make stop' to stop it."
+
+.PHONY: _build_and_start_new_environment
+_build_and_start_new_environment:
+	@echo "Building new environment..."
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers
+	@echo "Build successful - updating manifests..."
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _generate_requirements_manifest
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _generate_packages_manifest
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _save_manifests
+	@echo "Saving successful environment tags..."
+	@source "${ADORE_CLI_TEMP_DIR}/build_vars" && \
+	bash "${TAG_HISTORY_MANAGER}" save "$$ACTUAL_BASE_TAG" "$$ACTUAL_CORE_TAG" "$$ACTUAL_USER_TAG"
+	@echo "Starting new environment..."
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _start_and_attach_interactive
+
+# === MAIN CLI TARGET ===
+.PHONY: cli 
+cli: docker_host_context_check _cli_smart_attach ## Start ADORe CLI docker context or attach to it if it is already running
+
+.PHONY: _cli_smart_attach
+_cli_smart_attach:
+	@echo "=== ADORe CLI Smart Attach ==="
+	@echo "Target container: ${ADORE_CLI_CONTAINER_NAME}"
+	@echo "Target image: ${ADORE_CLI_IMAGE}"
+	@echo ""
+	@if docker ps --format "{{.Names}}" | grep -q "^${ADORE_CLI_CONTAINER_NAME}$$"; then \
+	    echo "✅ Container ${ADORE_CLI_CONTAINER_NAME} is already running"; \
+	    echo "Attaching to existing session..."; \
+	    echo "Type 'exit' to detach from container (container will continue running)"; \
+	    echo "Use 'make stop' to stop the container"; \
+	    echo ""; \
+	    docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
+	    echo ""; \
+	    echo "Detached from container. Container is still running."; \
+	    echo "Use 'make cli' to reattach or 'make stop' to stop it."; \
+	elif docker ps -a --format "{{.Names}}" | grep -q "^${ADORE_CLI_CONTAINER_NAME}$$"; then \
+	    echo "Container ${ADORE_CLI_CONTAINER_NAME} exists but is stopped"; \
+	    echo "Starting existing container..."; \
+	    docker start ${ADORE_CLI_CONTAINER_NAME}; \
+	    echo "Attaching to restarted container..."; \
+	    docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
+	else \
+	    echo "No existing container found with name: ${ADORE_CLI_CONTAINER_NAME}"; \
+	    FORCE_INTERACTIVE=true make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_environment_changes; \
+	fi
 
 # === LIFECYCLE TARGETS ===
 .PHONY: start
@@ -510,9 +411,7 @@ start: adore_cli_setup adore_cli_start ## Start the ADORe CLI docker compose con
 stop: stop_adore_cli ## Stop ADORe CLI docker compose context if it is running
 
 .PHONY: run
-run: ## Execute a command in the ADORe CLI context `make run cmd="<command to execute>"`
-	@export ADORE_CLI_NON_INTERACTIVE=1 && \
-	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_setup adore_cli_start adore_cli_run adore_cli_teardown
+run: adore_cli_setup adore_cli_start adore_cli_run adore_cli_teardown ## Execute a command in the ADORe CLI context `make run cmd="<command to execute>"` 
 
 .PHONY: adore_cli_up
 adore_cli_up: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardown 
@@ -522,39 +421,88 @@ stop_adore_cli: docker_host_context_check adore_cli_teardown ## Stop adore_cli d
 
 # === BUILD TARGETS ===
 
-.PHONY: build_adore_cli
-build_adore_cli: _build_adore_cli_layers_force ## Build The ADORe CLI Docker Context (always builds current state)
-
-.PHONY: _build_adore_cli_layers  
-_build_adore_cli_layers: _build_adore_cli_layers_force ## Complete build process for ADORe CLI environment (always builds current state)
-
-.PHONY: _build_adore_cli_layers_force
-_build_adore_cli_layers_force: check_cross_compile_deps _determine_actual_build_tags
-	@echo "=== ADORe CLI Build Process (Force Build) ==="
+.PHONY: _build_adore_cli_layers
+_build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
+	@echo "=== ADORe CLI Multi-Layer Build Process ==="
 	@echo "Building ADORe CLI with three-layer architecture..."
 	@echo "Target architecture: ${ARCH}"
-	@echo "Build strategy: Always build current calculated state"
+	@echo "ADORe CLI branch: ${ADORE_CLI_BRANCH} (${ADORE_CLI_SHORT_HASH})"
+	@echo "ADORe CLI dirty: ${ADORE_CLI_IS_DIRTY}"
+	@echo "Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
+	@echo "Parent dirty: ${PARENT_IS_DIRTY}"
+	@echo "Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "Packages hash: ${PACKAGES_SHORT_HASH}"
+	@echo "User: ${USER} (UID: ${UID}, GID: ${GID})"
+	@echo ""
+	@echo "Build strategy:"
+	@echo "  1. Base layer:  Try registry pull → Use cache → Build locally"
+	@echo "  2. Core layer:  Try registry pull → Use cache → Build locally"
+	@echo "  3. User layer:  Use cache → Build locally (never pulled)"
 	@echo ""
 	@echo "Starting build process..."
 	@echo "=========================="
 	@source "${ADORE_CLI_TEMP_DIR}/build_vars" && \
-	ACTUAL_BASE_TAG="$$(echo "$$ACTUAL_BASE_TAG" | tr -d ' \t\n\r')" && \
-	ACTUAL_CORE_TAG="$$(echo "$$ACTUAL_CORE_TAG" | tr -d ' \t\n\r')" && \
-	ACTUAL_USER_TAG="$$(echo "$$ACTUAL_USER_TAG" | tr -d ' \t\n\r')" && \
-	echo "Building with determined tags:" && \
-	echo "  Base: adore_cli_base:$$ACTUAL_BASE_TAG" && \
-	echo "  Core: adore_cli_core:$$ACTUAL_CORE_TAG" && \
-	echo "  User: adore_cli:$$ACTUAL_USER_TAG" && \
-	ADORE_CLI_BASE_IMAGE="adore_cli_base:$$ACTUAL_BASE_TAG" \
-	ADORE_CLI_CORE_IMAGE="adore_cli_core:$$ACTUAL_CORE_TAG" \
-	ADORE_CLI_IMAGE="adore_cli:$$ACTUAL_USER_TAG" \
-	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers_internal && \
-	echo "Saving successful environment to history..." && \
-	SOURCE_DIRECTORY="${SOURCE_DIRECTORY}" bash "${TAG_HISTORY_SCRIPT}" save "$$ACTUAL_BASE_TAG" "$$ACTUAL_CORE_TAG" "$$ACTUAL_USER_TAG" && \
-	printf "FINAL_BASE_TAG=%s\n" "$$ACTUAL_BASE_TAG" > "${ADORE_CLI_TEMP_DIR}/final_tags" && \
-	printf "FINAL_CORE_TAG=%s\n" "$$ACTUAL_CORE_TAG" >> "${ADORE_CLI_TEMP_DIR}/final_tags" && \
-	printf "FINAL_USER_TAG=%s\n" "$$ACTUAL_USER_TAG" >> "${ADORE_CLI_TEMP_DIR}/final_tags" && \
-	echo "Build completed successfully!"
+	if ADORE_CLI_BASE_IMAGE="adore_cli_base:$$ACTUAL_BASE_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_base; then \
+	    echo "✓ Base layer build successful"; \
+	else \
+	    echo "✗ Base layer build failed"; \
+	    echo ""; \
+	    echo "BUILD FAILURE - TROUBLESHOOTING STEPS:"; \
+	    echo "1. Check Docker daemon is running: docker info"; \
+	    echo "2. Check disk space: df -h"; \
+	    echo "3. Clean up Docker: docker system prune -f"; \
+	    echo "4. Try building base layer manually:"; \
+	    echo "   cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_base && make build"; \
+	    echo "5. If issues persist, check Docker logs: docker logs"; \
+	    exit 1; \
+	fi && \
+	if ADORE_CLI_BASE_IMAGE="adore_cli_base:$$ACTUAL_BASE_TAG" ADORE_CLI_CORE_IMAGE="adore_cli_core:$$ACTUAL_CORE_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_core; then \
+	    echo "✓ Core layer build successful"; \
+	else \
+	    echo "✗ Core layer build failed"; \
+	    echo ""; \
+	    echo "BUILD FAILURE - TROUBLESHOOTING STEPS:"; \
+	    echo "1. Check requirements files syntax in your project"; \
+	    echo "2. Try building core layer manually:"; \
+	    echo "   cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core && make build"; \
+	    echo "3. Check for invalid package names: make debug_requirements"; \
+	    echo "4. Clean and retry: make clean && make build"; \
+	    exit 1; \
+	fi && \
+	if ADORE_CLI_IMAGE="adore_cli:$$ACTUAL_USER_TAG" ADORE_CLI_CORE_IMAGE="adore_cli_core:$$ACTUAL_CORE_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_and_build_user; then \
+	    echo "✓ User layer build successful"; \
+	else \
+	    echo "✗ User layer build failed"; \
+	    echo ""; \
+	    echo "BUILD FAILURE - TROUBLESHOOTING STEPS:"; \
+	    echo "1. Check .deb packages in vendor/ directory"; \
+	    echo "2. Try building user layer manually:"; \
+	    echo "   cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli && make build"; \
+	    echo "3. Check package dependencies: make debug_packages"; \
+	    echo "4. Clean and retry: make clean && make build"; \
+	    exit 1; \
+	fi && \
+	ACTUAL_BASE_TAG="$$ACTUAL_BASE_TAG" ACTUAL_CORE_TAG="$$ACTUAL_CORE_TAG" ACTUAL_USER_TAG="$$ACTUAL_USER_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _save_built_tags
+	@echo "=========================="
+	@echo "=== Multi-layer build process complete ==="
+	@source "${ADORE_CLI_TEMP_DIR}/build_vars"; \
+	echo "Final image: adore_cli:$$ACTUAL_USER_TAG"
+	@echo ""
+	@echo "✓ BUILD SUCCESSFUL!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  Start development environment: make cli"
+	@echo "  Run tests: make test"
+	@echo "  View all ADORe CLI targets: make help_cli"
+	@echo "  Check build status: make build_status"
+	@echo ""
+	@echo "If you encounter issues:"
+	@echo "  Debug information: make adore_cli_info"
+	@echo "  Force rebuild: make rebuild_force"
+	@echo "  Clean and rebuild: make clean && make build"
+
+.PHONY: build_adore_cli
+build_adore_cli: _build_adore_cli_layers ## Build The ADORe CLI Docker Context
 
 # === REBUILD TARGETS ===
 
@@ -566,18 +514,24 @@ rebuild_force: ## Force rebuild all layers (ignore existing images and cache)
 	@docker rmi ${ADORE_CLI_IMAGE} 2>/dev/null || true
 	@docker rmi ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true  
 	@docker rmi ${ADORE_CLI_BASE_IMAGE} 2>/dev/null || true
+	@rm -f "${BUILT_TAGS_FILE}"
 	@rm -f "${REQUIREMENTS_MANIFEST}" "${PACKAGES_MANIFEST}"
 	@rm -f "${LAST_REQUIREMENTS_MANIFEST}" "${LAST_PACKAGES_MANIFEST}"
 	@echo "Removed existing images and cache files"
 	@echo "Starting complete rebuild..."
 	@echo ""
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers_force
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers
 
 .PHONY: rebuild_from_layer
 rebuild_from_layer: ## Rebuild from specific layer onwards. Usage: make rebuild_from_layer LAYER=base|core|user
 	@if [ -z "$(LAYER)" ]; then \
 	    echo "ERROR: LAYER parameter required"; \
 	    echo "Usage: make rebuild_from_layer LAYER=base|core|user"; \
+	    echo ""; \
+	    echo "Examples:"; \
+	    echo "  make rebuild_from_layer LAYER=base   # Rebuild base, core, and user layers"; \
+	    echo "  make rebuild_from_layer LAYER=core   # Rebuild core and user layers"; \
+	    echo "  make rebuild_from_layer LAYER=user   # Rebuild only user layer"; \
 	    exit 1; \
 	fi
 	@echo "=== REBUILD FROM LAYER: $(LAYER) ==="
@@ -602,9 +556,10 @@ rebuild_from_layer: ## Rebuild from specific layer onwards. Usage: make rebuild_
 	        exit 1; \
 	        ;; \
 	esac
+	@rm -f "${BUILT_TAGS_FILE}"
 	@echo "Starting rebuild from $(LAYER) layer..."
 	@echo ""
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers_force
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers
 
 # === INTERNAL BUILD TARGETS ===
 
@@ -716,6 +671,7 @@ _build_user_layer: check_cross_compile_deps
 
 .PHONY: clean_adore_cli 
 clean_adore_cli: ## Clean adore_cli docker context 
+	@rm -f "${BUILT_TAGS_FILE}"
 	cd "${ADORE_CLI_MAKEFILE_PATH}" && make clean
 
 # === SMART BUILD TARGETS WITH MANIFEST CHECKING ===
@@ -736,27 +692,18 @@ _check_and_build_base:
 
 .PHONY: _check_and_build_core
 _check_and_build_core:
-	@if [ -f "${ADORE_CLI_TEMP_DIR}/build_vars" ]; then \
-		source "${ADORE_CLI_TEMP_DIR}/build_vars" && \
-		CORE_IMAGE_TO_CHECK="adore_cli_core:$$ACTUAL_CORE_TAG"; \
-	else \
-		CORE_IMAGE_TO_CHECK="${ADORE_CLI_CORE_IMAGE}"; \
-	fi; \
-	echo "Checking for core image: $$CORE_IMAGE_TO_CHECK"; \
-	if ! docker image inspect "$$CORE_IMAGE_TO_CHECK" >/dev/null 2>&1; then \
-	    echo "Core environment image not found locally: $$CORE_IMAGE_TO_CHECK"; \
+	@if ! docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
+	    echo "Core environment image not found locally: ${ADORE_CLI_CORE_IMAGE}"; \
 	    echo "Attempting to pull from registry..."; \
-	    ADORE_CLI_CORE_IMAGE="$$CORE_IMAGE_TO_CHECK" \
 	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _try_pull_core; \
-	    if ! docker image inspect "$$CORE_IMAGE_TO_CHECK" >/dev/null 2>&1; then \
+	    if ! docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
 	        cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core && make gather_requirements; \
-	        echo "Building core environment layer locally: $$CORE_IMAGE_TO_CHECK"; \
-	        ADORE_CLI_CORE_IMAGE="$$CORE_IMAGE_TO_CHECK" \
+	        echo "Building core environment layer locally: ${ADORE_CLI_CORE_IMAGE}"; \
 	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_layer; \
 	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _save_manifests; \
 	    fi; \
 	else \
-	    echo "✓ Core environment layer exists (using cache): $$CORE_IMAGE_TO_CHECK"; \
+	    echo "✓ Core environment layer exists (using cache): ${ADORE_CLI_CORE_IMAGE}"; \
 	fi
 
 .PHONY: _check_and_build_user
@@ -796,7 +743,7 @@ adore_cli_start:
 	@echo "  ADORE_CLI_IMAGE: ${ADORE_CLI_IMAGE}"
 	@echo "  ADORE_CLI_CONTAINER_NAME: ${ADORE_CLI_CONTAINER_NAME}"
 	@echo "  Expected core image: ${ADORE_CLI_CORE_IMAGE}"
-	@echo "  User: ${USER} (UID: ${UID}, GID: ${GID})"
+	@echo ${ADORE_CLI_MAKEFILE_PATH}
 	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
 	    echo "ERROR: Required user image not found: ${ADORE_CLI_IMAGE}"; \
 	    echo "Available images with similar names:"; \
@@ -860,48 +807,72 @@ container_name_adore_cli: ## Returns the container name for the adore_cli
 .PHONY: adore_cli_info
 adore_cli_info: ## Show configuration information for ADORe CLI
 	@echo "=== ADORe CLI Configuration ==="
-	@echo "USER: ${USER} (UID: ${UID}, GID: ${GID})"
-	@echo "ARCH: ${ARCH}"
+	@echo "ADORE_CLI_MAKEFILE_PATH: ${ADORE_CLI_MAKEFILE_PATH}"
+	@echo "ROOT_DIR: ${ROOT_DIR}"
+	@echo "SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
+	@echo "VENDOR_PATH: ${VENDOR_PATH}"
 	@echo "ROS_DISTRO: ${ROS_DISTRO}"
+	@echo "OS_CODE_NAME: ${OS_CODE_NAME}"
+	@echo "ARCH: ${ARCH}"
+	@echo "DOCKER_PLATFORM: ${DOCKER_PLATFORM}"
+	@echo "CROSS_COMPILE: ${CROSS_COMPILE}"
+	@echo "USER: ${USER}"
+	@echo "UID: ${UID}"
+	@echo "GID: ${GID}"
 	@echo "=== Docker Images ==="
 	@echo "Base Foundation: ${ADORE_CLI_BASE_IMAGE}"
 	@echo "Core Environment: ${ADORE_CLI_CORE_IMAGE}"
 	@echo "User Layer: ${ADORE_CLI_IMAGE}"
 	@echo "Container Name: ${ADORE_CLI_CONTAINER_NAME}"
-	@echo "=== Tag History ==="
-	@LAST_USER_TAG=$$(SOURCE_DIRECTORY="${SOURCE_DIRECTORY}" bash "${TAG_HISTORY_SCRIPT}" get_last 2>/dev/null || echo "none"); \
-	echo "Last successful environment: $$LAST_USER_TAG"
+	@echo "=== Build Configuration ==="
+	@echo "DOCKER_BUILDKIT: ${DOCKER_BUILDKIT}"
+	@echo "ADORe CLI Branch: ${ADORE_CLI_BRANCH}"
+	@echo "ADORe CLI Hash: ${ADORE_CLI_SHORT_HASH}"
+	@echo "ADORe CLI Dirty: ${ADORE_CLI_IS_DIRTY}"
+	@echo "Parent Branch: ${PARENT_BRANCH}"
+	@echo "Parent Hash: ${PARENT_SHORT_HASH}"
+	@echo "Parent Dirty: ${PARENT_IS_DIRTY}"
+	@echo "Parent is ADORe CLI: ${PARENT_IS_ADORE_CLI}"
+	@echo "Requirements Hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "Packages Hash: ${PACKAGES_SHORT_HASH}"
+	@echo "=== Built Tags Status ==="
+	@if [ -f "${BUILT_TAGS_FILE}" ]; then \
+	    echo "Built tags file exists: ${BUILT_TAGS_FILE}"; \
+	    cat "${BUILT_TAGS_FILE}"; \
+	else \
+	    echo "No built tags file found at: ${BUILT_TAGS_FILE}"; \
+	fi
+	@echo "=== Manifest Status ==="
+	@REQUIREMENTS_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_requirements_manifest_changed 2>/dev/null || echo "unknown"); \
+	PACKAGES_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_packages_manifest_changed 2>/dev/null || echo "unknown"); \
+	echo "Requirements Manifest Changed: $$REQUIREMENTS_CHANGED"; \
+	echo "Packages Manifest Changed: $$PACKAGES_CHANGED"; \
+	echo "Requirements Manifest: ${REQUIREMENTS_MANIFEST}"; \
+	echo "Packages Manifest: ${PACKAGES_MANIFEST}"
+	@echo "=== Paths Check ==="
+	@echo "Called from: $(shell pwd)"
+	@echo "Vendor exists: $(shell [ -d '${VENDOR_PATH}' ] && echo 'yes' || echo 'no')"
+	@echo "Source is adore_cli: $(shell [ '${SOURCE_DIRECTORY}' = '${ADORE_CLI_MAKEFILE_PATH}' ] && echo 'yes' || echo 'no')"
 
 .PHONY: build_status
 build_status: ## Show status of all build layers
 	@echo "=== ADORe CLI Build Status ==="
 	@printf "%-20s %-60s %s\n" "Layer" "Image" "Status"
 	@printf "%-20s %-60s %s\n" "----" "----" "----"
-	@# Use final tags if available, otherwise use defaults
-	@if [ -f "${ADORE_CLI_TEMP_DIR}/final_tags" ]; then \
-		source "${ADORE_CLI_TEMP_DIR}/final_tags" && \
-		BASE_IMAGE="adore_cli_base:$$FINAL_BASE_TAG" && \
-		CORE_IMAGE="adore_cli_core:$$FINAL_CORE_TAG" && \
-		USER_IMAGE="adore_cli:$$FINAL_USER_TAG"; \
+	@if docker image inspect ${ADORE_CLI_BASE_IMAGE} >/dev/null 2>&1; then \
+	    printf "%-20s %-60s %s\n" "Base Foundation" "${ADORE_CLI_BASE_IMAGE}" "✓ EXISTS"; \
 	else \
-		BASE_IMAGE="${ADORE_CLI_BASE_IMAGE}" && \
-		CORE_IMAGE="${ADORE_CLI_CORE_IMAGE}" && \
-		USER_IMAGE="${ADORE_CLI_IMAGE}"; \
-	fi; \
-	if docker image inspect "$$BASE_IMAGE" >/dev/null 2>&1; then \
-		printf "%-20s %-60s %s\n" "Base Foundation" "$$BASE_IMAGE" "✓ EXISTS"; \
+	    printf "%-20s %-60s %s\n" "Base Foundation" "${ADORE_CLI_BASE_IMAGE}" "✗ MISSING"; \
+	fi
+	@if docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
+	    printf "%-20s %-60s %s\n" "Core Environment" "${ADORE_CLI_CORE_IMAGE}" "✓ EXISTS"; \
 	else \
-		printf "%-20s %-60s %s\n" "Base Foundation" "$$BASE_IMAGE" "✗ MISSING"; \
-	fi; \
-	if docker image inspect "$$CORE_IMAGE" >/dev/null 2>&1; then \
-		printf "%-20s %-60s %s\n" "Core Environment" "$$CORE_IMAGE" "✓ EXISTS"; \
+	    printf "%-20s %-60s %s\n" "Core Environment" "${ADORE_CLI_CORE_IMAGE}" "✗ MISSING"; \
+	fi
+	@if docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
+	    printf "%-20s %-60s %s\n" "User Layer" "${ADORE_CLI_IMAGE}" "✓ EXISTS"; \
 	else \
-		printf "%-20s %-60s %s\n" "Core Environment" "$$CORE_IMAGE" "✗ MISSING"; \
-	fi; \
-	if docker image inspect "$$USER_IMAGE" >/dev/null 2>&1; then \
-		printf "%-20s %-60s %s\n" "User Layer" "$$USER_IMAGE" "✓ EXISTS"; \
-	else \
-		printf "%-20s %-60s %s\n" "User Layer" "$$USER_IMAGE" "✗ MISSING"; \
+	    printf "%-20s %-60s %s\n" "User Layer" "${ADORE_CLI_IMAGE}" "✗ MISSING"; \
 	fi
 
 # === REGISTRY INTEGRATION ===
@@ -969,6 +940,27 @@ push_base_images:
 	    echo "✗ Core environment image not found locally"; \
 	fi
 
+.PHONY: cleanup_registry_images
+cleanup_registry_images:
+	@echo "=== Cleaning up old registry images ==="
+	@if [ "$$(git branch --show-current 2>/dev/null || echo ${GITHUB_REF##*/})" != "ros2" ] && [ "${GITHUB_REF}" != "refs/heads/ros2" ]; then \
+	    echo "Skipping cleanup - not on ros2 branch"; \
+	    exit 0; \
+	fi; \
+	GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
+	echo "Getting last 2 commits from ros2 branch..."; \
+	COMMITS=$$(git log --format="%H" -n 2 ros2 2>/dev/null || git log --format="%H" -n 2 HEAD); \
+	echo "Commits to keep:"; \
+	echo "$$COMMITS"; \
+	KEEP_HASHES=""; \
+	for commit in $$COMMITS; do \
+	    short_hash=$$(echo $$commit | cut -c1-7); \
+	    KEEP_HASHES="$$KEEP_HASHES $$short_hash"; \
+	    echo "  - $$short_hash ($$commit)"; \
+	done; \
+	echo "Protected commit hashes:$$KEEP_HASHES"; \
+	echo "Registry cleanup would preserve images with these hashes"
+
 .PHONY: _try_pull_base
 _try_pull_base:
 	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
@@ -1001,61 +993,150 @@ _try_pull_core:
 help_cli: ## Show ADORe CLI help 
 	@echo "=== ADORe CLI Help ==="
 	@echo ""
-	@echo "Smart Environment Management:"
-	@echo "  build              Build current calculated environment (always builds)"
-	@echo "  cli                Start development environment (smart selection)"
-	@echo "  run cmd=\"...\"       Execute command (non-interactive, always continues)"
+	@echo "ADORe CLI uses a three-layer Docker architecture for efficient builds:"
+	@echo "  Target architecture: ${ARCH}"
+	@echo "  ADORe CLI branch: ${ADORE_CLI_BRANCH} (${ADORE_CLI_SHORT_HASH})"
+	@echo "  Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
+	@echo "  Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "  Packages hash: ${PACKAGES_SHORT_HASH}"
+	@echo "  User: ${USER} (UID: ${UID}, GID: ${GID})"
 	@echo ""
-	@echo "Environment Status:"
+	@echo "Build strategy:"
+	@echo "  1. Base layer:  OS + ROS2 foundation (highly cacheable)"
+	@echo "  2. Core layer:  Complete environment + dependencies (shareable)"
+	@echo "  3. User layer:  User customization + packages (user-specific)"
+	@echo ""
+	@echo "=== Main User Targets ==="
+	@echo "  build              Build complete ADORe CLI environment (recommended first step)"
+	@echo "  cli                Start/attach to ADORe CLI (auto-builds if needed)"
+	@echo "  start              Start ADORe CLI in background"
+	@echo "  stop               Stop ADORe CLI container"
+	@echo "  run cmd=\"...\"       Execute command in ADORe CLI"
+	@echo "  clean              Clean all images and build artifacts"
+	@echo "  test               Run test suite"
+	@echo ""
+	@echo "=== Build and Debug Targets ==="
+	@echo "  rebuild_force      Force rebuild all layers (ignore cache)"
+	@echo "  rebuild_from_layer LAYER=base|core|user  Rebuild from specific layer"
 	@echo "  build_status       Show status of all build layers"
-	@echo "  adore_cli_info     Show current configuration and last environment"
+	@echo "  adore_cli_info     Show current configuration"
+	@echo "  debug_run          Launch interactive bash shell in user image"
+	@echo "  debug_run_root     Launch interactive bash shell as root"
 	@echo ""
-	@echo "Smart Features:"
-	@echo "  - 'make cli' will prompt you when changes are detected"
-	@echo "  - 'make run' always continues with existing environment"
-	@echo "  - 'make build' always builds the current state"
+	@echo "=== Registry Targets ==="
+	@echo "  registry_status    Check availability of images in registry"
+	@echo "  try_pull_base_images  Attempt to pull base/core from registry"
+	@echo "  push_base_images   Push base/core images to registry"
 	@echo ""
-	@echo "Choices when prompted:"
-	@echo "  [C] Continue - Keep using your current working environment"
-	@echo "  [B] Build    - Build new environment with current changes"  
-	@echo "  [A] Abort    - Cancel and exit"
+	@echo "=== Information Targets ==="
+	@echo "  help_cli           Show this help message"
+	@echo "  image_adore_cli    Show current user image name"
+	@echo "  images_adore_cli   Show all image names"
+	@echo "  container_name_adore_cli  Show container name"
+	@echo "  branch_adore_cli   Show current tag"
+	@echo ""
+	@echo "=== Common Workflows ==="
+	@echo ""
+	@echo "First Time Setup:"
+	@echo "  1. make build      # Build all layers"
+	@echo "  2. make cli        # Start development environment"
+	@echo ""
+	@echo "Daily Development:"
+	@echo "  - make cli         # Start/attach to environment"
+	@echo "  - make stop        # Stop when done"
+	@echo ""
+	@echo "When Requirements Change:"
+	@echo "  - make build       # Rebuild affected layers automatically"
+	@echo "  - make cli         # Start with new environment"
+	@echo ""
+	@echo "Troubleshooting Build Issues:"
+	@echo "  1. make build_status          # Check which layers exist"
+	@echo "  2. make adore_cli_info        # Show configuration"
+	@echo "  3. make rebuild_force         # Force complete rebuild"
+	@echo "  4. make rebuild_from_layer LAYER=core  # Rebuild from core layer"
+	@echo "  5. docker system prune -f    # Clean Docker cache if space issues"
+	@echo ""
+	@echo "Partial Rebuilds:"
+	@echo "  - make rebuild_from_layer LAYER=base   # Rebuild all layers"
+	@echo "  - make rebuild_from_layer LAYER=core   # Rebuild core + user"
+	@echo "  - make rebuild_from_layer LAYER=user   # Rebuild user layer only"
+	@echo ""
+	@echo "=== Getting Help ==="
+	@echo "  For build failures: Check error messages and try troubleshooting steps above"
+	@echo "  For runtime issues: make adore_cli_info to check configuration"
+	@echo "  For Docker issues: Ensure Docker daemon is running and has sufficient space"
 
-.PHONY: debug_tags
-debug_tags: _determine_actual_build_tags ## Debug tag calculation
-	@echo "=== DEBUG: Tag Calculation ==="
-	@echo "Raw variables:"
-	@echo "  ARCH: '${ARCH}'"
-	@echo "  ADORE_CLI_BRANCH: '${ADORE_CLI_BRANCH}'"
-	@echo "  ADORE_CLI_SHORT_HASH: '${ADORE_CLI_SHORT_HASH}'"
-	@echo "  PARENT_BRANCH: '${PARENT_BRANCH}'"
-	@echo "  PARENT_SHORT_HASH: '${PARENT_SHORT_HASH}'"
-	@echo "  REQUIREMENTS_SHORT_HASH: '${REQUIREMENTS_SHORT_HASH}'"
-	@echo "  USER: '${USER}'"
-	@echo "  UID: '${UID}'"
-	@echo "  GID: '${GID}'"
+.PHONY: debug_requirements
+debug_requirements: ## Debug requirements hash calculation
+	@echo "=== Requirements Debug ==="
+	@echo "SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
+	@echo "Looking for requirements files:"
+	@find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) \
+		! -path "*/ros_translator/*" \
+		! -path "*/.log/*" \
+		! -path "*/.git/*" \
+		! -path "*/build/*" \
+		2>/dev/null | head -10 || echo "No files found"
 	@echo ""
-	@echo "Calculated default tags:"
-	@echo "  Base: '${ADORE_CLI_BASE_TAG_DEFAULT}'"
-	@echo "  Core: '${ADORE_CLI_CORE_TAG_DEFAULT}'"
-	@echo "  User: '${ADORE_CLI_USER_TAG_DEFAULT}'"
+	@echo "Current requirements hash: ${REQUIREMENTS_SHORT_HASH}"
 	@echo ""
-	@echo "Current runtime tags:"
-	@echo "  Base: '${ADORE_CLI_BASE_TAG}'"
-	@echo "  Core: '${ADORE_CLI_CORE_TAG}'"
-	@echo "  User: '${ADORE_CLI_TAG}'"
-	@echo ""
-	@if [ -f "${ADORE_CLI_TEMP_DIR}/build_vars" ]; then \
-		echo "Build vars file contents:"; \
-		cat "${ADORE_CLI_TEMP_DIR}/build_vars"; \
+	@echo "Requirements manifest file: ${REQUIREMENTS_MANIFEST}"
+	@if [ -f "${REQUIREMENTS_MANIFEST}" ]; then \
+		echo "Current manifest exists:"; \
+		head -5 "${REQUIREMENTS_MANIFEST}"; \
 	else \
-		echo "No build_vars file found"; \
+		echo "Current manifest does not exist"; \
 	fi
 	@echo ""
-	@if [ -f "${ADORE_CLI_TEMP_DIR}/final_tags" ]; then \
-		echo "Final tags file contents:"; \
-		cat "${ADORE_CLI_TEMP_DIR}/final_tags"; \
+	@echo "Last requirements manifest: ${LAST_REQUIREMENTS_MANIFEST}"
+	@if [ -f "${LAST_REQUIREMENTS_MANIFEST}" ]; then \
+		echo "Last manifest exists:"; \
+		head -5 "${LAST_REQUIREMENTS_MANIFEST}"; \
 	else \
-		echo "No final_tags file found"; \
+		echo "Last manifest does not exist"; \
 	fi
+	@echo ""
+	@echo "Manifest changed: $$(make _check_requirements_manifest_changed)"
+
+.PHONY: debug_manifest_generation
+debug_manifest_generation: ## Debug the manifest generation process step by step
+	@echo "=== Debug Manifest Generation ==="
+	@echo "Requirements file: ${SOURCE_DIRECTORY}/requirements.system"
+	@echo "File exists: $$(test -f ${SOURCE_DIRECTORY}/requirements.system && echo YES || echo NO)"
+	@echo "File content: $$(cat ${SOURCE_DIRECTORY}/requirements.system 2>/dev/null || echo 'FILE NOT FOUND')"
+	@echo "File hash: $$(sha256sum ${SOURCE_DIRECTORY}/requirements.system 2>/dev/null || echo 'CANNOT HASH')"
+	@echo ""
+	@echo "=== Testing find command ==="
+	@find "${SOURCE_DIRECTORY}" -type f -name "requirements.system" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | head -5
+	@echo ""
+	@echo "=== Testing full find command ==="
+	@find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | grep requirements.system
+	@echo ""
+	@echo "=== Testing sha256sum on found files ==="
+	@find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | grep requirements.system | xargs -r sha256sum 2>/dev/null
+	@echo ""
+	@echo "=== Regenerating manifest manually ==="
+	@TEMP_MANIFEST="/tmp/debug_manifest_$$$$"; \
+	find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | \
+	xargs -r sha256sum 2>/dev/null | sort > "$$TEMP_MANIFEST"; \
+	echo "Generated manifest:"; \
+	grep requirements.system "$$TEMP_MANIFEST" || echo "requirements.system not found in generated manifest"; \
+	echo "Full temp manifest line count: $$(wc -l < $$TEMP_MANIFEST)"; \
+	rm -f "$$TEMP_MANIFEST"
+
+.PHONY: debug_manifest_state
+debug_manifest_state: ## Debug current manifest state
+	@echo "=== Current Manifest State Debug ==="
+	@echo "Requirements file content: $$(cat ${SOURCE_DIRECTORY}/requirements.system 2>/dev/null || echo 'NOT FOUND')"
+	@echo "Requirements file hash: $$(sha256sum ${SOURCE_DIRECTORY}/requirements.system 2>/dev/null || echo 'CANNOT HASH')"
+	@echo ""
+	@echo "Current manifest (should match current files):"
+	@grep requirements.system "${REQUIREMENTS_MANIFEST}" 2>/dev/null || echo "Not found in current manifest"
+	@echo ""
+	@echo "Last manifest (should be from previous build):"
+	@grep requirements.system "${LAST_REQUIREMENTS_MANIFEST}" 2>/dev/null || echo "Not found in last manifest"
+	@echo ""
+	@echo "Regenerating fresh manifest:"
+	@find "${SOURCE_DIRECTORY}" -name "requirements.system" -exec sha256sum {} \; | head -1
 
 endif

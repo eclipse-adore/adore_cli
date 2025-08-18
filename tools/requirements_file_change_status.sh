@@ -19,20 +19,19 @@ check_requirements_changes() {
         RESET=''
     fi
     
-    # Calculate current requirements hash using same method as adore_cli.mk
     current_requirements_hash=""
     if [ -n "${SOURCE_DIRECTORY}" ] && [ -d "${SOURCE_DIRECTORY}" ]; then
-        # Find all requirements files and calculate hash
+        # Find all requirements files and calculate hash - EXACT same logic as Makefile
         current_requirements_hash=$(find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) \
+            ! -path "*/ros_translator/*" \
             ! -path "*/.log/*" \
             ! -path "*/.git/*" \
             ! -path "*/build/*" \
-            ! -path "*/.tmp/*" \
             2>/dev/null | \
             xargs -r cat 2>/dev/null | \
             sha256sum | cut -c1-7)
     fi
-    
+   
     # Get container requirements hash from CORE image tag (not user image tag)
     container_requirements_hash=""
     
