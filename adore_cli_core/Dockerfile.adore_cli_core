@@ -39,28 +39,25 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
 # === REQUIREMENTS GATHERING AND INSTALLATION ===
 # Copy the gather script and requirements files from build context
 COPY gather_requirements_files.sh /tmp/gather_requirements_files.sh
-COPY .log/.adore_cli/requirements /tmp/.log/.adore_cli/requirements
+COPY .log/.adore_cli/requirements /tmp/requirements
 WORKDIR /tmp
 
 # Make the gather script executable and create temporary directory
-RUN chmod +x /tmp/gather_requirements_files.sh && \
-    mkdir -p /tmp/.tmp/requirements
+RUN chmod +x /tmp/gather_requirements_files.sh
 
 # Copy requirements to temporary directory and process them during build
-RUN if [ -d "/tmp/.log/.adore_cli/requirements" ]; then \
+RUN if [ -d "/tmp/requirements" ]; then \
         echo "=== Processing requirements during Docker build ==="; \
-        cp -r /tmp/.log/.adore_cli/requirements/* /tmp/.tmp/requirements/ 2>/dev/null || true; \
         cd /tmp/.tmp/requirements; \
         echo "Requirements found in build context:"; \
         ls -la . || echo "No requirements files"; \
-        echo "=== Installing requirements ==="; \
     else \
         echo "No requirements directory in build context"; \
-        touch /tmp/.tmp/requirements/.gitkeep; \
+        touch /tmp/requirements/.gitkeep; \
     fi
 
 # === REPOSITORY AND PPA SETUP ===
-WORKDIR /tmp/.tmp/requirements
+WORKDIR /tmp/requirements
 
 # Add PPAs first (if any)
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
@@ -68,11 +65,24 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     apt-get update && apt-get install -y software-properties-common && \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
     apt-get update && \
-    find . -maxdepth 1 -type f -name '*.ppa' -exec cat {} + 2>/dev/null | \
+    find . -type f -name '*.ppa' -exec cat {} + 2>/dev/null | \
     sed '/^#/d' | \
     sed '/^$/d' | \
     envsubst | \
     xargs -r -I {} add-apt-repository -y {} || true
+
+
+WORKDIR /tmp/requirements
+
+RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && \
+    cat combined_requirements.system | \
+    sed '/^#/d' | \
+    sed '/^$/d' | \
+    envsubst
+
 
 # === SYSTEM PACKAGES ===
 # Install system packages discovered from requirements files
@@ -80,7 +90,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     --mount=target=/var/cache/apt,type=cache,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
     apt-get update && \
-    find . -maxdepth 1 -type f -name '*.system' -exec cat {} + 2>/dev/null | \
+    find . -type f -name '*.system' -exec cat {} + 2>/dev/null | \
     sed '/^#/d' | \
     sed '/^$/d' | \
     envsubst | \
@@ -89,13 +99,13 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
 # === PYTHON PACKAGES ===
 # Install Python packages discovered from requirements files
 RUN --mount=type=cache,target=/root/.cache/pip \
-    find . -maxdepth 1 -type f -name '*.pip3' -exec cat {} + 2>/dev/null | \
+    find . -type f -name '*.pip3' -exec cat {} + 2>/dev/null | \
     xargs -r python3 -m pip install --ignore-installed --break-system-packages || true
 
 # === GENERATE REQUIREMENTS MANIFEST ===
 # Create a manifest of what was installed for tracking changes
 RUN echo "=== Generating requirements manifest ===" && \
-    cd /tmp/.tmp/requirements && \
+    cd /tmp/requirements && \
     find . -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) 2>/dev/null | \
     xargs -r sha256sum 2>/dev/null | sort > requirements_manifest.sha256 || \
     touch requirements_manifest.sha256 && \
@@ -104,6 +114,6 @@ RUN echo "=== Generating requirements manifest ===" && \
 
 # === SUCCESS MARKER ===
 # Create a marker file to indicate successful build for later copying
-RUN echo "Build completed successfully at $(date)" > /tmp/.tmp/requirements/build_success.marker
+RUN echo "Build completed successfully at $(date)" > /tmp/requirements/build_success.marker
 
 WORKDIR /tmp/adore

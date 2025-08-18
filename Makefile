@@ -40,12 +40,20 @@ debug_run_root:
 	@echo "Starting root debug session with user image: ${ADORE_CLI_IMAGE}"
 	docker run -it --rm --user root --entrypoint /bin/bash ${ADORE_CLI_IMAGE}
 
+
+.PHONY: save
+save: save_docker_images ## Save all ADORe Docker images to disk in .docker_cache
+
 # === CLEANUP TARGETS ===
 
 .PHONY: clean
 clean:
 	@echo "Cleaning build artifacts and Docker images..."
 	@rm -rf build
+	@rm -rf adore_cli/packages
+	@rm -rf adore_cli/packages_manifest.txt
+	@rm -rf adore_cli_core/.log
+
 	@echo "Removing ADORe CLI images..."
 	@docker rmi $$(docker images -q ${ADORE_CLI_BASE_IMAGE}) --force 2> /dev/null || true
 	@docker rmi $$(docker images -q ${ADORE_CLI_CORE_IMAGE}) --force 2> /dev/null || true
@@ -59,4 +67,5 @@ clean:
 
 .PHONY: test
 test: ci_test
+
 
