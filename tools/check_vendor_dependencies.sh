@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
+GREEN="\033[0;32m"
+NC="\033[0m" # No Color
+CHECKMARK="${GREEN}✔${NC}"
+
 check_vendor_dependencies() {
     # Set colors for output
     if [[ -n "$TERM" && "$TERM" != "dumb" && "$TERM" != "unknown" ]]; then
@@ -53,15 +57,16 @@ check_vendor_dependencies() {
             fi
         fi
     fi
-    
+   
+
+    printf "    === Installed Packages(.deb) ===\n"
+
+
     # Count .deb packages in vendor directory
     deb_count=0
     if [ -d "${SOURCE_DIRECTORY}/vendor" ]; then
         deb_count=$(find "${SOURCE_DIRECTORY}/vendor" -name "*.deb" -type f 2>/dev/null | wc -l)
     fi
-    
-    printf "    Package Dependencies Status:\n"
-    printf "    Current package hash: ${current_package_hash}\n"
     
     # Check for missing vendor packages
     if [ "$deb_count" -lt 1 ]; then
@@ -105,7 +110,8 @@ check_vendor_dependencies() {
             fi
         fi
     else
-        printf "    ${GREEN}✓${RESET} Found $deb_count vendor dependency packages (hash: ${current_package_hash})\n"
+
+        printf "    ${CHECKMARK} Found $deb_count vendor dependency packages (hash: ${current_package_hash})\n"
     fi
 }
 

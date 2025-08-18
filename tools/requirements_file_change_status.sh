@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+GREEN="\033[0;32m"
+NC="\033[0m" # No Color
+CHECKMARK="${GREEN}✔${NC}"
+
 check_requirements_changes() {
     if [[ -n "$TERM" && "$TERM" != "dumb" && "$TERM" != "unknown" ]]; then
         BOLD='\033[1m'
@@ -19,7 +24,6 @@ check_requirements_changes() {
     if [ -n "${SOURCE_DIRECTORY}" ] && [ -d "${SOURCE_DIRECTORY}" ]; then
         # Find all requirements files and calculate hash
         current_requirements_hash=$(find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) \
-            ! -path "*/ros_translator/*" \
             ! -path "*/.log/*" \
             ! -path "*/.git/*" \
             ! -path "*/build/*" \
@@ -49,7 +53,9 @@ check_requirements_changes() {
             fi
         fi
     fi
-    
+   
+    printf "    === Requirements(APT, PPA, PIP) ===\n"
+
     # Compare hashes and show status
     if [ -z "$current_requirements_hash" ]; then
         printf "    ${ORANGE}INFO:${RESET} No requirements files found in project\n"
@@ -87,7 +93,7 @@ check_requirements_changes() {
             printf "    Requirements files may have been modified since last container build.\n"
         fi
     else
-        printf "    ${GREEN}✓${RESET} Requirements are up to date (hash: ${current_requirements_hash})\n"
+        printf "    ${CHECKMARK} Requirements are up to date (hash: ${current_requirements_hash})\n"
     fi
 }
 
