@@ -65,7 +65,8 @@ PARENT_IS_DIRTY:=$(shell cd ${SOURCE_DIRECTORY} && if [ -n "$$(git status --porc
 REQUIREMENTS_SHORT_HASH:=$(shell find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | xargs -r cat 2>/dev/null | sha256sum | cut -c1-7)
 
 # === PACKAGES HASH GENERATION ===
-PACKAGES_SHORT_HASH:=$(shell find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | sort | xargs -r sha256sum 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
+# Hash only package names (basenames) for better determinism
+PACKAGES_SHORT_HASH:=$(shell find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | sort | xargs -r -I {} basename {} 2>/dev/null | sort | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
 
 # === MANIFEST PATHS ===
 REQUIREMENTS_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/requirements_manifest.sha256
@@ -86,18 +87,18 @@ else
     ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}
 endif
 
-# Core image tagging according to requirements
+# Core image tagging according to requirements (using uppercase RH)
 ifeq ($(PARENT_IS_ADORE_CLI),true)
     ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
 else
-    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_rh${REQUIREMENTS_SHORT_HASH}
+    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_SHORT_HASH}
 endif
 
-# User image tagging with package hash and username
+# User image tagging with package hash, username, UID and GID (using uppercase PH)
 ifeq ($(PARENT_IS_ADORE_CLI),true)
-    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${USER}
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${USER}_UID${UID}GID${GID}
 else
-    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_ph${PACKAGES_SHORT_HASH}_${USER}
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_PH${PACKAGES_SHORT_HASH}_${USER}_UID${UID}GID${GID}
 endif
 
 # Use default tags for runtime (simplified - no complex built tag logic)
@@ -146,7 +147,8 @@ _generate_packages_manifest:
 	@mkdir -p "$(shell dirname ${PACKAGES_MANIFEST})"
 	@if [ -d "${VENDOR_PATH}" ]; then \
 		find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | \
-		xargs -r sha256sum 2>/dev/null | sort > "${PACKAGES_MANIFEST}"; \
+		sort | xargs -r -I {} basename {} 2>/dev/null | \
+		sort | sha256sum > "${PACKAGES_MANIFEST}"; \
 	else \
 		touch "${PACKAGES_MANIFEST}"; \
 	fi

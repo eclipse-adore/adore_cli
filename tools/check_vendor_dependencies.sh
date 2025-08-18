@@ -22,10 +22,10 @@ check_vendor_dependencies() {
     if [ -n "${SOURCE_DIRECTORY}" ] && [ -d "${SOURCE_DIRECTORY}" ]; then
         vendor_path="${SOURCE_DIRECTORY}/vendor"
         if [ -d "$vendor_path" ]; then
-            # Calculate hash of all .deb files in vendor directory
+            # Calculate hash of package names only (for determinism)
             current_package_hash=$(find "$vendor_path" -type f -name "*.deb" 2>/dev/null | \
-                sort | xargs -r sha256sum 2>/dev/null | \
-                sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
+                sort | xargs -r -I {} basename {} 2>/dev/null | \
+                sort | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
         else
             current_package_hash="0000000"
         fi
@@ -33,13 +33,13 @@ check_vendor_dependencies() {
         current_package_hash="0000000"
     fi
     
-    # Get container package hash from image tag
+    # Get container package hash from USER image tag (PH hash is in user layer)
     container_package_hash=""
     
-    # Extract package hash from current image tag (format includes ph<hash>)
+    # Extract package hash from current USER image tag (format includes PH<hash>)
     if [ -n "${ADORE_CLI_IMAGE}" ]; then
-        # Extract package hash from tag like: adore_cli:x86_64_main_abc1234_parent_def5678_ph9876543_username
-        container_package_hash=$(echo "${ADORE_CLI_IMAGE}" | grep -o 'ph[a-f0-9]\{7\}' | cut -c3-)
+        # Extract package hash from tag like: adore_cli:x86_64_main_abc1234_parent_def5678_PH9876543_username_UID1000GID1000
+        container_package_hash=$(echo "${ADORE_CLI_IMAGE}" | grep -o 'PH[a-f0-9]\{7\}' | cut -c3-)
     fi
     
     # If no hash in tag, check built tags file
@@ -49,7 +49,7 @@ check_vendor_dependencies() {
             # Try to extract from USER tag which should contain package hash
             user_tag=$(grep "^USER=" "$built_tags_file" 2>/dev/null | cut -d'=' -f2)
             if [ -n "$user_tag" ]; then
-                container_package_hash=$(echo "$user_tag" | grep -o 'ph[a-f0-9]\{7\}' | cut -c3-)
+                container_package_hash=$(echo "$user_tag" | grep -o 'PH[a-f0-9]\{7\}' | cut -c3-)
             fi
         fi
     fi
@@ -76,6 +76,7 @@ check_vendor_dependencies() {
     if [ -z "$container_package_hash" ]; then
         printf "    ${ORANGE}INFO:${RESET} Unable to determine container package hash\n"
         printf "    Found $deb_count vendor dependency packages\n"
+        printf "    User image: ${ADORE_CLI_IMAGE:-NOT_SET}\n"
         return
     fi
     

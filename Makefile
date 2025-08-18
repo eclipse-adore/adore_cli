@@ -21,7 +21,7 @@ OS_CODE_NAME:=noble
 
 # === INCLUDES ===
 include ${ROOT_DIR}/adore_cli.mk
-include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
+-include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 
 # === BUILD TARGETS ===
 
@@ -68,5 +68,3 @@ clean:
 
 .PHONY: test
 test: ci_test
-
-

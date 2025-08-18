@@ -29,23 +29,23 @@ check_requirements_changes() {
             sha256sum | cut -c1-7)
     fi
     
-    # Get container requirements hash from image tag or built tags file
+    # Get container requirements hash from CORE image tag (not user image tag)
     container_requirements_hash=""
     
-    # First try to extract from current image tag (for parent projects, format includes rh<hash>)
-    if [ -n "${ADORE_CLI_IMAGE}" ]; then
-        # Extract requirements hash from tag like: adore_cli:x86_64_main_abc1234_parent_def5678_rh9876543
-        container_requirements_hash=$(echo "${ADORE_CLI_IMAGE}" | grep -o 'rh[a-f0-9]\{7\}' | cut -c3-)
+    # Look for RH hash in the CORE image tag (requirements hash is in core layer)
+    if [ -n "${ADORE_CLI_CORE_IMAGE}" ]; then
+        # Extract requirements hash from core tag like: adore_cli_core:x86_64_main_abc1234_parent_def5678_RH9876543
+        container_requirements_hash=$(echo "${ADORE_CLI_CORE_IMAGE}" | grep -o 'RH[a-f0-9]\{7\}' | cut -c3-)
     fi
     
-    # If no hash in tag, check built tags file
+    # If no hash in core image tag, check built tags file
     if [ -z "$container_requirements_hash" ] && [ -n "${SOURCE_DIRECTORY}" ]; then
         built_tags_file="${SOURCE_DIRECTORY}/.log/.adore_cli/built_tags"
         if [ -f "$built_tags_file" ]; then
             # Try to extract from CORE tag which should contain requirements hash
             core_tag=$(grep "^CORE=" "$built_tags_file" 2>/dev/null | cut -d'=' -f2)
             if [ -n "$core_tag" ]; then
-                container_requirements_hash=$(echo "$core_tag" | grep -o 'rh[a-f0-9]\{7\}' | cut -c3-)
+                container_requirements_hash=$(echo "$core_tag" | grep -o 'RH[a-f0-9]\{7\}' | cut -c3-)
             fi
         fi
     fi
@@ -59,6 +59,7 @@ check_requirements_changes() {
     if [ -z "$container_requirements_hash" ]; then
         printf "    ${ORANGE}INFO:${RESET} Unable to determine container requirements hash\n"
         printf "    Current calculated requirements hash: ${current_requirements_hash}\n"
+        printf "    Core image: ${ADORE_CLI_CORE_IMAGE:-NOT_SET}\n"
         return 0
     fi
     

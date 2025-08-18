@@ -68,10 +68,6 @@ build: clean gather_requirements
 	@make copy_requirements_from_container
 
 # Target: gather_requirements
-# Description: Discovers and gathers all requirements files from the project tree
-# - Creates build context requirements directory
-# - Runs the gather script to find and process requirements
-# - Copies results to build context for Docker
 .PHONY: gather_requirements
 gather_requirements:
 	@echo "=== Gathering requirements for core layer ==="
@@ -106,10 +102,6 @@ gather_requirements:
 	@echo "=== Requirements gathering complete ==="
 
 # Target: copy_requirements_from_container
-# Description: Copies the .tmp directory from a successful container build to SOURCE_DIRECTORY
-# - Extracts the temporary requirements directory from the built container
-# - Copies to SOURCE_DIRECTORY/.log/.adore_cli/requirements for persistence
-# - Only runs if the build was successful (success marker exists)
 .PHONY: copy_requirements_from_container
 copy_requirements_from_container:
 	@echo "=== Copying requirements from successful build ==="
@@ -141,7 +133,6 @@ copy_requirements_from_container:
 	fi
 
 # Target: clean
-# Description: Cleans up build artifacts and temporary directories
 .PHONY: clean
 clean:
 	@echo "Cleaning core build artifacts..."
@@ -149,7 +140,6 @@ clean:
 	@rm -rf "${BUILD_CONTEXT_REQUIREMENTS_DIR}" 2>/dev/null || true
 
 # Target: debug_requirements
-# Description: Shows current requirements gathering status for debugging
 .PHONY: debug_requirements
 debug_requirements:
 	@echo "=== Requirements Debug Info ==="
