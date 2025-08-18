@@ -40,80 +40,103 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
 # Copy the gather script and requirements files from build context
 COPY gather_requirements_files.sh /tmp/gather_requirements_files.sh
 COPY .log/.adore_cli/requirements /tmp/requirements
-WORKDIR /tmp
+WORKDIR /tmp/requirements
 
-# Make the gather script executable and create temporary directory
-RUN chmod +x /tmp/gather_requirements_files.sh
+# Make the gather script executable and create temporary directory for tracking
+RUN chmod +x /tmp/gather_requirements_files.sh && \
+    mkdir -p /tmp/.tmp/requirements
 
-# Copy requirements to temporary directory and process them during build
-RUN if [ -d "/tmp/requirements" ]; then \
-        echo "=== Processing requirements during Docker build ==="; \
-        cd /tmp/.tmp/requirements; \
-        echo "Requirements found in build context:"; \
-        ls -la . || echo "No requirements files"; \
-    else \
-        echo "No requirements directory in build context"; \
-        touch /tmp/requirements/.gitkeep; \
-    fi
+# Validate that requirements were properly gathered
+RUN echo "=== Validating requirements in build context ===" && \
+    ls -la . && \
+    echo "Combined requirements files:" && \
+    ls -la combined_* 2>/dev/null || echo "No combined files found" && \
+    echo "Contents of combined_requirements.system:" && \
+    cat combined_requirements.system 2>/dev/null || echo "No system requirements" && \
+    echo "Contents of combined_requirements.pip3:" && \
+    cat combined_requirements.pip3 2>/dev/null || echo "No pip3 requirements" && \
+    echo "Contents of combined_requirements.ppa:" && \
+    cat combined_requirements.ppa 2>/dev/null || echo "No PPA requirements"
 
 # === REPOSITORY AND PPA SETUP ===
-WORKDIR /tmp/requirements
-
-# Add PPAs first (if any)
-RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt,type=cache,sharing=locked \
-    apt-get update && apt-get install -y software-properties-common && \
-    rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && \
-    find . -type f -name '*.ppa' -exec cat {} + 2>/dev/null | \
-    sed '/^#/d' | \
-    sed '/^$/d' | \
-    envsubst | \
-    xargs -r -I {} add-apt-repository -y {} || true
-
-
-WORKDIR /tmp/requirements
-
-RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt,type=cache,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && \
-    cat combined_requirements.system | \
-    sed '/^#/d' | \
-    sed '/^$/d' | \
-    envsubst
-
+# Add PPAs first (if any) and update package lists
+RUN echo "=== Setting up PPAs ===" && \
+    if [ -f "combined_requirements.ppa" ] && [ -s "combined_requirements.ppa" ]; then \
+        echo "Adding PPAs..." && \
+        apt-get update && \
+        apt-get install -y software-properties-common && \
+        while IFS= read -r ppa; do \
+            if [ ! -z "$ppa" ] && [ "${ppa#ppa:}" != "$ppa" ]; then \
+                echo "Adding PPA: $ppa" && \
+                add-apt-repository -y "$ppa" || echo "Failed to add PPA: $ppa"; \
+            fi; \
+        done < combined_requirements.ppa && \
+        apt-get update; \
+    else \
+        echo "No PPAs to add"; \
+    fi
 
 # === SYSTEM PACKAGES ===
 # Install system packages discovered from requirements files
-RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt,type=cache,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && \
-    find . -type f -name '*.system' -exec cat {} + 2>/dev/null | \
-    sed '/^#/d' | \
-    sed '/^$/d' | \
-    envsubst | \
-    xargs -r apt-get install --no-install-recommends -y || true
+RUN echo "=== Installing system packages ===" && \
+    if [ -f "combined_requirements.system" ] && [ -s "combined_requirements.system" ]; then \
+        echo "Installing packages from combined_requirements.system..." && \
+        cat combined_requirements.system && \
+        echo "Package count: $(wc -l < combined_requirements.system)" && \
+        apt-get update && \
+        PACKAGES=$(cat combined_requirements.system | envsubst | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//') && \
+        echo "Processed packages: $PACKAGES" && \
+        if [ ! -z "$PACKAGES" ]; then \
+            apt-get install --no-install-recommends -y $PACKAGES && \
+            echo "Successfully installed system packages"; \
+        else \
+            echo "No packages to install"; \
+        fi; \
+    else \
+        echo "No system packages to install"; \
+    fi
 
 # === PYTHON PACKAGES ===
 # Install Python packages discovered from requirements files
-RUN --mount=type=cache,target=/root/.cache/pip \
-    find . -type f -name '*.pip3' -exec cat {} + 2>/dev/null | \
-    xargs -r python3 -m pip install --ignore-installed --break-system-packages || true
+RUN echo "=== Installing Python packages ===" && \
+    if [ -f "combined_requirements.pip3" ] && [ -s "combined_requirements.pip3" ]; then \
+        echo "Installing packages from combined_requirements.pip3..." && \
+        cat combined_requirements.pip3 && \
+        PACKAGES=$(cat combined_requirements.pip3 | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//') && \
+        echo "Processed packages: $PACKAGES" && \
+        if [ ! -z "$PACKAGES" ]; then \
+            python3 -m pip install --ignore-installed --break-system-packages $PACKAGES && \
+            echo "Successfully installed Python packages"; \
+        else \
+            echo "No Python packages to install"; \
+        fi; \
+    else \
+        echo "No Python packages to install"; \
+    fi
+
+# === VERIFY INSTALLATIONS ===
+# Verify that key packages are actually installed and available
+RUN echo "=== Verifying package installations ===" && \
+    if [ -f "combined_requirements.system" ]; then \
+        echo "Checking for proj package (commonly requested)..." && \
+        (pkg-config --exists proj && echo "✓ proj package found via pkg-config") || \
+        (dpkg -l | grep -i proj && echo "✓ proj-related packages found") || \
+        echo "⚠ proj package may not be properly installed" && \
+        echo "Available proj-related packages:" && \
+        apt-cache search proj | head -5; \
+    fi
 
 # === GENERATE REQUIREMENTS MANIFEST ===
 # Create a manifest of what was installed for tracking changes
 RUN echo "=== Generating requirements manifest ===" && \
-    cd /tmp/requirements && \
     find . -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) 2>/dev/null | \
-    xargs -r sha256sum 2>/dev/null | sort > requirements_manifest.sha256 || \
-    touch requirements_manifest.sha256 && \
-    echo "Requirements manifest:" && \
-    cat requirements_manifest.sha256 || echo "Empty manifest"
+    xargs -r sha256sum 2>/dev/null | sort > /tmp/.tmp/requirements/requirements_manifest.sha256 && \
+    echo "Requirements manifest created:" && \
+    cat /tmp/.tmp/requirements/requirements_manifest.sha256
 
 # === SUCCESS MARKER ===
 # Create a marker file to indicate successful build for later copying
-RUN echo "Build completed successfully at $(date)" > /tmp/requirements/build_success.marker
+RUN echo "Build completed successfully at $(date)" > /tmp/.tmp/requirements/build_success.marker && \
+    echo "Core layer build complete - all requirements processed"
 
 WORKDIR /tmp/adore

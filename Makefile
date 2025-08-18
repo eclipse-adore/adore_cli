@@ -26,7 +26,7 @@ include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 # === BUILD TARGETS ===
 
 .PHONY: build
-build: _build_adore_cli_layers ## Complete build process for ADORe CLI environment
+build: clean _build_adore_cli_layers ## Complete build process for ADORe CLI environment
 
 # === DEBUG AND DEVELOPMENT TARGETS ===
 
@@ -50,6 +50,7 @@ save: save_docker_images ## Save all ADORe Docker images to disk in .docker_cach
 clean:
 	@echo "Cleaning build artifacts and Docker images..."
 	@rm -rf build
+	@rm -rf adore_cli/.tmp
 	@rm -rf adore_cli/packages
 	@rm -rf adore_cli/packages_manifest.txt
 	@rm -rf adore_cli_core/.log

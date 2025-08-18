@@ -34,8 +34,8 @@ HOSTNAME ?= "ADORe-CLI"
 ADORE_CLI_PROJECT:=adore_cli
 ADORE_CLI_MAKEFILE_PATH:=$(shell realpath "$(shell dirname "$(lastword $(MAKEFILE_LIST))")")
 
-GITHUB_REPO?=""
-
+# Default GITHUB_REPOSITORY to prevent undefined variable warnings
+GITHUB_REPOSITORY?=dlr-ts/adore_develop
 
 # === PATH CONFIGURATION ===
 MAKE_GADGETS_PATH:=${ADORE_CLI_MAKEFILE_PATH}/make_gadgets
@@ -88,10 +88,8 @@ endif
 
 # Core image tagging according to requirements
 ifeq ($(PARENT_IS_ADORE_CLI),true)
-    # If invoked from adore_cli itself: adore_cli_core:<arch>_<branch name>_<short_hash>
     ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
 else
-    # If invoked from parent: adore_cli_core:<arch>_<branch>_<hash>_<parent_branch>_<parent_hash>_rh<req_hash>
     ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_rh${REQUIREMENTS_SHORT_HASH}
 endif
 
@@ -102,21 +100,10 @@ else
     ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_ph${PACKAGES_SHORT_HASH}_${USER}
 endif
 
-# Try to load actual built tags if they exist
-ifneq ($(wildcard $(BUILT_TAGS_FILE)),)
-    BUILT_BASE_TAG:=$(shell grep "^BASE=" $(BUILT_TAGS_FILE) 2>/dev/null | cut -d'=' -f2 || echo ${ADORE_CLI_BASE_TAG_DEFAULT})
-    BUILT_CORE_TAG:=$(shell grep "^CORE=" $(BUILT_TAGS_FILE) 2>/dev/null | cut -d'=' -f2 || echo ${ADORE_CLI_CORE_TAG_DEFAULT})
-    BUILT_USER_TAG:=$(shell grep "^USER=" $(BUILT_TAGS_FILE) 2>/dev/null | cut -d'=' -f2 || echo ${ADORE_CLI_USER_TAG_DEFAULT})
-else
-    BUILT_BASE_TAG:=${ADORE_CLI_BASE_TAG_DEFAULT}
-    BUILT_CORE_TAG:=${ADORE_CLI_CORE_TAG_DEFAULT}
-    BUILT_USER_TAG:=${ADORE_CLI_USER_TAG_DEFAULT}
-endif
-
-# Use built tags for runtime
-ADORE_CLI_BASE_TAG:=${BUILT_BASE_TAG}
-ADORE_CLI_CORE_TAG:=${BUILT_CORE_TAG}
-ADORE_CLI_TAG:=${BUILT_USER_TAG}
+# Use default tags for runtime (simplified - no complex built tag logic)
+ADORE_CLI_BASE_TAG:=${ADORE_CLI_BASE_TAG_DEFAULT}
+ADORE_CLI_CORE_TAG:=${ADORE_CLI_CORE_TAG_DEFAULT}
+ADORE_CLI_TAG:=${ADORE_CLI_USER_TAG_DEFAULT}
 
 ADORE_CLI_BASE_IMAGE:=adore_cli_base:${ADORE_CLI_BASE_TAG}
 ADORE_CLI_CORE_IMAGE:=adore_cli_core:${ADORE_CLI_CORE_TAG}
@@ -134,12 +121,6 @@ UID := $(shell id -u)
 GID := $(shell id -g)
 ADORE_TAG ?= $(ADORE_CLI_TAG)
 
-# === TAG HISTORY CONFIGURATION ===
-ADORE_CLI_TAG_HISTORY_FILE:=${SOURCE_DIRECTORY}/.log/.adore_cli/adore_cli_tag_history
-ADORE_CLI_HISTORY_VARS:=${ADORE_CLI_TEMP_DIR}/adore_cli_history_vars
-ADORE_CLI_CHOICE_VARS:=${ADORE_CLI_TEMP_DIR}/adore_cli_choice_vars
-ADORE_CLI_EFFECTIVE_VARS:=${ADORE_CLI_TEMP_DIR}/adore_cli_effective_vars
-
 # === INCLUDES ===
 include ${MAKE_GADGETS_PATH}/make_gadgets.mk
 include ${MAKE_GADGETS_PATH}/docker/docker-tools.mk
@@ -150,11 +131,6 @@ $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.zsh_history")
 $(shell touch "${ADORE_CLI_MAKEFILE_PATH}/.bash_history")
 $(shell mkdir -p "${SOURCE_DIRECTORY}/.log/.adore_cli")
 $(shell mkdir -p "${ADORE_CLI_TEMP_DIR}")
-
-# === HELPER FUNCTIONS ===
-define cleanup_temp_files
-	@rm -f "${ADORE_CLI_HISTORY_VARS}" "${ADORE_CLI_CHOICE_VARS}" "${ADORE_CLI_EFFECTIVE_VARS}"
-endef
 
 # === MANIFEST MANAGEMENT ===
 .PHONY: _generate_requirements_manifest
@@ -282,126 +258,61 @@ check_cross_compile_deps: check_docker_version
 	    export DOCKER_BUILDX=1; \
 	fi
 
-# === TAG HISTORY MANAGEMENT ===
+# === MAIN CLI TARGET ===
 
-.PHONY: _cli_read_history
-_cli_read_history:
-	@mkdir -p "${ADORE_CLI_TEMP_DIR}"
-	@if [ -f "${ADORE_CLI_TAG_HISTORY_FILE}" ]; then \
-	    LAST_INFO=$$(cat "${ADORE_CLI_TAG_HISTORY_FILE}" 2>/dev/null || echo ""); \
-	    if [ -n "$$LAST_INFO" ]; then \
-	        echo "LAST_TAG=$$(echo "$$LAST_INFO" | cut -d'|' -f1)" > "${ADORE_CLI_HISTORY_VARS}"; \
-	        echo "LAST_CONTAINER_NAME=$$(echo "$$LAST_INFO" | cut -d'|' -f2)" >> "${ADORE_CLI_HISTORY_VARS}"; \
-	        echo "LAST_IMAGE=$$(echo "$$LAST_INFO" | cut -d'|' -f3)" >> "${ADORE_CLI_HISTORY_VARS}"; \
-	    else \
-	        echo "LAST_TAG=" > "${ADORE_CLI_HISTORY_VARS}"; \
-	        echo "LAST_CONTAINER_NAME=" >> "${ADORE_CLI_HISTORY_VARS}"; \
-	        echo "LAST_IMAGE=" >> "${ADORE_CLI_HISTORY_VARS}"; \
-	    fi; \
-	else \
-	    echo "LAST_TAG=" > "${ADORE_CLI_HISTORY_VARS}"; \
-	    echo "LAST_CONTAINER_NAME=" >> "${ADORE_CLI_HISTORY_VARS}"; \
-	    echo "LAST_IMAGE=" >> "${ADORE_CLI_HISTORY_VARS}"; \
-	fi
+.PHONY: cli 
+cli: docker_host_context_check _cli_smart_attach ## Start ADORe CLI docker context or attach to it if it is already running
 
-.PHONY: _cli_save_history
-_cli_save_history:
-	@echo "${ADORE_CLI_TAG}|${ADORE_CLI_CONTAINER_NAME}|${ADORE_CLI_IMAGE}" > "${ADORE_CLI_TAG_HISTORY_FILE}"
-
-.PHONY: _cli_check_tag_changes
-_cli_check_tag_changes: _cli_read_history
-	@source "${ADORE_CLI_HISTORY_VARS}"; \
-	if [ -n "$$LAST_TAG" ] && [ "$$LAST_TAG" != "${ADORE_CLI_TAG}" ]; then \
-	    echo "TAG_CHANGED=true" > "${ADORE_CLI_CHOICE_VARS}"; \
-	    echo "Warning: ADORE_CLI tag has changed"; \
-	    echo "  Previous: $$LAST_IMAGE"; \
-	    echo "  Current:  ${ADORE_CLI_IMAGE}"; \
-	    echo; \
-	    if [[ "$$(docker inspect -f '{{.State.Running}}' "$$LAST_CONTAINER_NAME" 2>/dev/null)" == "true" ]]; then \
-	        echo "Previous container is still running: $$LAST_CONTAINER_NAME"; \
-	        echo "CONTAINER_RUNNING=true" >> "${ADORE_CLI_CHOICE_VARS}"; \
-	    else \
-	        echo "CONTAINER_RUNNING=false" >> "${ADORE_CLI_CHOICE_VARS}"; \
-	    fi; \
-	else \
-	    echo "TAG_CHANGED=false" > "${ADORE_CLI_CHOICE_VARS}"; \
-	    echo "CONTAINER_RUNNING=false" >> "${ADORE_CLI_CHOICE_VARS}"; \
-	fi
-
-.PHONY: _cli_prompt_user
-_cli_prompt_user:
-	@source "${ADORE_CLI_CHOICE_VARS}"; \
-	if [ "$$TAG_CHANGED" = "true" ]; then \
-	    if [ "$$CONTAINER_RUNNING" = "true" ]; then \
-	        read -p "Choose action: (r)ebuild with new tag, (a)ttach to old container, or (q)abort? [r/a/q]: " choice; \
-	    else \
-	        read -p "Choose action: (r)ebuild with new tag, (a)ttach with old tag, or (q)abort? [r/a/q]: " choice; \
-	    fi; \
-	    echo "USER_CHOICE=$$choice" >> "${ADORE_CLI_CHOICE_VARS}"; \
-	else \
-	    echo "USER_CHOICE=continue" >> "${ADORE_CLI_CHOICE_VARS}"; \
-	fi
-
-.PHONY: _cli_handle_choice
-_cli_handle_choice: _cli_prompt_user
-	@source "${ADORE_CLI_CHOICE_VARS}"; \
-	source "${ADORE_CLI_HISTORY_VARS}"; \
-	case "$$USER_CHOICE" in \
-	    a|A) \
-	        if [ "$$CONTAINER_RUNNING" = "true" ]; then \
-	            echo "Attaching to previous container: $$LAST_CONTAINER_NAME"; \
-	        else \
-	            echo "Using previous tag: $$LAST_TAG"; \
-	        fi; \
-	        echo "EFFECTIVE_TAG=$$LAST_TAG" > "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	        echo "EFFECTIVE_CONTAINER_NAME=$$LAST_CONTAINER_NAME" >> "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	        echo "EFFECTIVE_IMAGE=$$LAST_IMAGE" >> "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	        ;; \
-	    q|Q) \
-	        echo "Aborted by user"; \
-	        $(call cleanup_temp_files); \
-	        exit 1; \
-	        ;; \
-	    *) \
-	        if [ "$$TAG_CHANGED" = "true" ]; then \
-	            echo "Rebuilding with new tag: ${ADORE_CLI_TAG}"; \
-	            make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _cli_save_history; \
-	        fi; \
-	        echo "EFFECTIVE_TAG=${ADORE_CLI_TAG}" > "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	        echo "EFFECTIVE_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME}" >> "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	        echo "EFFECTIVE_IMAGE=${ADORE_CLI_IMAGE}" >> "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	        ;; \
-	esac; \
-	if [ "$$USER_CHOICE" = "continue" ]; then \
-	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _cli_save_history; \
-	    echo "EFFECTIVE_TAG=${ADORE_CLI_TAG}" > "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	    echo "EFFECTIVE_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME}" >> "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	    echo "EFFECTIVE_IMAGE=${ADORE_CLI_IMAGE}" >> "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	fi
-
-.PHONY: _cli_execute
-_cli_execute:
-	@source "${ADORE_CLI_EFFECTIVE_VARS}"; \
-	if [[ "$$(docker inspect -f '{{.State.Running}}' "$$EFFECTIVE_CONTAINER_NAME" 2>/dev/null)" == "true" ]]; then \
-	    echo "Attaching to existing container: $$EFFECTIVE_CONTAINER_NAME"; \
+.PHONY: _cli_smart_attach
+_cli_smart_attach:
+	@echo "=== ADORe CLI Smart Attach ==="
+	@echo "Target container: ${ADORE_CLI_CONTAINER_NAME}"
+	@echo "Target image: ${ADORE_CLI_IMAGE}"
+	@echo ""
+	@if docker ps --format "{{.Names}}" | grep -q "^${ADORE_CLI_CONTAINER_NAME}$$"; then \
+	    echo "✓ Container ${ADORE_CLI_CONTAINER_NAME} is already running"; \
+	    echo "Attaching to existing session..."; \
 	    echo "Type 'exit' to detach from container (container will continue running)"; \
 	    echo "Use 'make stop' to stop the container"; \
 	    echo ""; \
-	    docker exec -it "$$EFFECTIVE_CONTAINER_NAME" /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
+	    docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
 	    echo ""; \
 	    echo "Detached from container. Container is still running."; \
 	    echo "Use 'make cli' to reattach or 'make stop' to stop it."; \
+	elif docker ps -a --format "{{.Names}}" | grep -q "^${ADORE_CLI_CONTAINER_NAME}$$"; then \
+	    echo "Container ${ADORE_CLI_CONTAINER_NAME} exists but is stopped"; \
+	    echo "Starting existing container..."; \
+	    docker start ${ADORE_CLI_CONTAINER_NAME}; \
+	    echo "Attaching to restarted container..."; \
+	    docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
 	else \
-	    echo "Starting new container with tag: $$EFFECTIVE_TAG"; \
-	    cd "${ADORE_CLI_MAKEFILE_PATH}" && \
-	    ADORE_CLI_TAG="$$EFFECTIVE_TAG" \
-	    ADORE_CLI_CONTAINER_NAME="$$EFFECTIVE_CONTAINER_NAME" \
-	    ADORE_CLI_IMAGE="$$EFFECTIVE_IMAGE" \
-	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _start_and_attach_interactive; \
-	fi; \
-	rm -f "${ADORE_CLI_HISTORY_VARS}" "${ADORE_CLI_CHOICE_VARS}" "${ADORE_CLI_EFFECTIVE_VARS}"
+	    echo "No existing container found with name: ${ADORE_CLI_CONTAINER_NAME}"; \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _cli_build_and_start; \
+	fi
 
-# Interactive flow - start container and attach, but don't teardown
+.PHONY: _cli_build_and_start
+_cli_build_and_start:
+	@echo "=== Building and Starting New Container ==="
+	@NEED_BUILD=false; \
+	if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
+	    echo "User image missing: ${ADORE_CLI_IMAGE}"; \
+	    NEED_BUILD=true; \
+	elif ! docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
+	    echo "Core image missing: ${ADORE_CLI_CORE_IMAGE}"; \
+	    NEED_BUILD=true; \
+	elif ! docker image inspect ${ADORE_CLI_BASE_IMAGE} >/dev/null 2>&1; then \
+	    echo "Base image missing: ${ADORE_CLI_BASE_IMAGE}"; \
+	    NEED_BUILD=true; \
+	fi; \
+	if [ "$$NEED_BUILD" = "true" ]; then \
+	    echo "Building missing images..."; \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers; \
+	else \
+	    echo "✓ All required images exist"; \
+	fi
+	@echo "Starting new container..."
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _start_and_attach_interactive
+
 .PHONY: _start_and_attach_interactive
 _start_and_attach_interactive: adore_cli_setup adore_cli_start
 	@echo "Container started. Attaching to interactive session..."
@@ -413,34 +324,6 @@ _start_and_attach_interactive: adore_cli_setup adore_cli_start
 	@echo "Detached from container. Container is still running."
 	@echo "Use 'make cli' to reattach or 'make stop' to stop it."
 
-# === MAIN CLI TARGET ===
-
-.PHONY: cli 
-cli: docker_host_context_check _determine_image_needs _cli_check_tag_changes _cli_handle_choice _cli_execute ## Start ADORe CLI docker context or attach to it if it is already running
-
-.PHONY: _determine_image_needs
-_determine_image_needs:
-	@echo "Checking if necessary images exist..."
-	@NEED_BUILD=false; \
-	if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
-	    echo "User image missing: ${ADORE_CLI_IMAGE}"; \
-	    NEED_BUILD=true; \
-	fi; \
-	if ! docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
-	    echo "Core image missing: ${ADORE_CLI_CORE_IMAGE}"; \
-	    NEED_BUILD=true; \
-	fi; \
-	if ! docker image inspect ${ADORE_CLI_BASE_IMAGE} >/dev/null 2>&1; then \
-	    echo "Base image missing: ${ADORE_CLI_BASE_IMAGE}"; \
-	    NEED_BUILD=true; \
-	fi; \
-	if [ "$$NEED_BUILD" = "true" ]; then \
-	    echo "Building missing images..."; \
-	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers; \
-	else \
-	    echo "✓ All required images exist, starting CLI..."; \
-	fi
-
 # === LIFECYCLE TARGETS ===
 .PHONY: start
 start: adore_cli_setup adore_cli_start ## Start the ADORe CLI docker compose context 
@@ -451,7 +334,6 @@ stop: stop_adore_cli ## Stop ADORe CLI docker compose context if it is running
 .PHONY: run
 run: adore_cli_setup adore_cli_start adore_cli_run adore_cli_teardown ## Execute a command in the ADORe CLI context `make run cmd="<command to execute>"` 
 
-# Non-interactive flow - for scripts and CI (includes teardown)
 .PHONY: adore_cli_up
 adore_cli_up: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardown 
 
@@ -550,13 +432,10 @@ rebuild_force: ## Force rebuild all layers (ignore existing images and cache)
 	@echo "=== FORCE REBUILD: Removing all existing ADORe CLI images ==="
 	@echo "This will force rebuild all layers from scratch..."
 	@echo ""
-	@# Remove existing images to force rebuild
 	@docker rmi ${ADORE_CLI_IMAGE} 2>/dev/null || true
 	@docker rmi ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true  
 	@docker rmi ${ADORE_CLI_BASE_IMAGE} 2>/dev/null || true
-	@# Remove built tags to force regeneration
 	@rm -f "${BUILT_TAGS_FILE}"
-	@# Clean manifests to force regeneration
 	@rm -f "${REQUIREMENTS_MANIFEST}" "${PACKAGES_MANIFEST}"
 	@rm -f "${LAST_REQUIREMENTS_MANIFEST}" "${LAST_PACKAGES_MANIFEST}"
 	@echo "Removed existing images and cache files"
@@ -598,7 +477,6 @@ rebuild_from_layer: ## Rebuild from specific layer onwards. Usage: make rebuild_
 	        exit 1; \
 	        ;; \
 	esac
-	@# Remove built tags to force regeneration for affected layers
 	@rm -f "${BUILT_TAGS_FILE}"
 	@echo "Starting rebuild from $(LAYER) layer..."
 	@echo ""
@@ -714,9 +592,7 @@ _build_user_layer: check_cross_compile_deps
 
 .PHONY: clean_adore_cli 
 clean_adore_cli: ## Clean adore_cli docker context 
-	@rm -f "${ADORE_CLI_TAG_HISTORY_FILE}"
 	@rm -f "${BUILT_TAGS_FILE}"
-	$(call cleanup_temp_files)
 	cd "${ADORE_CLI_MAKEFILE_PATH}" && make clean
 
 # === SMART BUILD TARGETS WITH MANIFEST CHECKING ===
@@ -740,16 +616,8 @@ _check_and_build_core:
 	@if ! docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
 	    echo "Core environment image not found locally: ${ADORE_CLI_CORE_IMAGE}"; \
 	    echo "Attempting to pull from registry..."; \
-	    if [ -z "${GITHUB_REPOSITORY}" ]; then \
-	        GITHUB_REPO="local/adore_cli"; \
-	    else \
-	        GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	    fi; \
-	    REGISTRY_IMAGE="ghcr.io/$${GITHUB_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
-	    if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \
-	        docker tag "$$REGISTRY_IMAGE" "${ADORE_CLI_CORE_IMAGE}"; \
-	        echo "✓ Pulled core environment from registry"; \
-	    else \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _try_pull_core; \
+	    if ! docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
 	        cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_core && make gather_requirements; \
 	        echo "Building core environment layer locally: ${ADORE_CLI_CORE_IMAGE}"; \
 	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core_layer; \
@@ -833,7 +701,6 @@ test_ros2_installation:
 adore_cli_start_headless: adore_cli_setup
 	export DISPLAY_MODE=headless && make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_start 
 
-# Standard attach (used by adore_cli_up and run target) 
 .PHONY: adore_cli_attach
 adore_cli_attach:
 	@echo "Running adore_cli attach..."
@@ -934,19 +801,7 @@ build_status: ## Show status of all build layers
 .PHONY: registry_status
 registry_status:
 	@echo "=== Registry Status ==="
-	@if [ -n "${GITHUB_REPOSITORY}" ]; then \
-	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	elif [ -n "${GITHUB_REPOSITORY_OWNER}" ]; then \
-	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY_OWNER}/adore_develop" | tr '[:upper:]' '[:lower:]'); \
-	else \
-	    echo "No GitHub repository information available."; \
-	    echo "Registry status only works in CI environment or when GITHUB_REPOSITORY is set."; \
-	    echo ""; \
-	    echo "To test locally, set environment variable:"; \
-	    echo "  export GITHUB_REPOSITORY=your-org/your-repo"; \
-	    echo "  make registry_status"; \
-	    exit 0; \
-	fi; \
+	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
 	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
 	echo "Registry: $${REGISTRY_PREFIX}"; \
 	echo "Checking base foundation: $${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}"; \
@@ -965,15 +820,7 @@ registry_status:
 .PHONY: try_pull_base_images
 try_pull_base_images:
 	@echo "=== Attempting to pull base and core images from registry ==="
-	@if [ -n "${GITHUB_REPOSITORY}" ]; then \
-	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	elif [ -n "${GITHUB_REPOSITORY_OWNER}" ]; then \
-	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY_OWNER}/adore_develop" | tr '[:upper:]' '[:lower:]'); \
-	else \
-	    echo "No GitHub repository configured - skipping registry pull"; \
-	    echo "Set GITHUB_REPOSITORY environment variable to enable registry features"; \
-	    exit 0; \
-	fi; \
+	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
 	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
 	echo "Registry prefix: $${REGISTRY_PREFIX}"; \
 	echo "Trying to pull base foundation: $${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}"; \
@@ -994,15 +841,7 @@ try_pull_base_images:
 .PHONY: push_base_images
 push_base_images:
 	@echo "=== Pushing base and core images to registry ==="
-	@if [ -n "${GITHUB_REPOSITORY}" ]; then \
-	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	elif [ -n "${GITHUB_REPOSITORY_OWNER}" ]; then \
-	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY_OWNER}/adore_develop" | tr '[:upper:]' '[:lower:]'); \
-	else \
-	    echo "No GitHub repository configured - cannot push to registry"; \
-	    echo "Set GITHUB_REPOSITORY environment variable to enable registry push"; \
-	    exit 1; \
-	fi; \
+	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
 	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
 	echo "Registry prefix: $${REGISTRY_PREFIX}"; \
 	if docker image inspect "${ADORE_CLI_BASE_IMAGE}" >/dev/null 2>&1; then \
@@ -1029,11 +868,7 @@ cleanup_registry_images:
 	    echo "Skipping cleanup - not on ros2 branch"; \
 	    exit 0; \
 	fi; \
-	if [ -z "${GITHUB_REPOSITORY}" ]; then \
-	    GITHUB_REPO="local/adore_cli"; \
-	else \
-	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	fi; \
+	GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
 	echo "Getting last 2 commits from ros2 branch..."; \
 	COMMITS=$$(git log --format="%H" -n 2 ros2 2>/dev/null || git log --format="%H" -n 2 HEAD); \
 	echo "Commits to keep:"; \
@@ -1047,14 +882,9 @@ cleanup_registry_images:
 	echo "Protected commit hashes:$$KEEP_HASHES"; \
 	echo "Registry cleanup would preserve images with these hashes"
 
-# Helper targets for individual image pulling
 .PHONY: _try_pull_base
 _try_pull_base:
-	@if [ -z "${GITHUB_REPOSITORY}" ]; then \
-	    GITHUB_REPO="local/adore_cli"; \
-	else \
-	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	fi; \
+	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
 	REGISTRY_IMAGE="ghcr.io/$${GITHUB_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
 	if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \
 	    docker tag "$$REGISTRY_IMAGE" "${ADORE_CLI_BASE_IMAGE}"; \
@@ -1067,11 +897,7 @@ _try_pull_base:
 
 .PHONY: _try_pull_core
 _try_pull_core:
-	@if [ -z "${GITHUB_REPOSITORY}" ]; then \
-	    GITHUB_REPO="local/adore_cli"; \
-	else \
-	    GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	fi; \
+	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
 	REGISTRY_IMAGE="ghcr.io/$${GITHUB_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
 	if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \
 	    docker tag "$$REGISTRY_IMAGE" "${ADORE_CLI_CORE_IMAGE}"; \
