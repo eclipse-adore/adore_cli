@@ -4,7 +4,7 @@ name: ADORe CLI CI
 on:
   push:
     branches:
-      - 'ros2'
+      - '**'
   pull_request:
     branches:
       - '**'
