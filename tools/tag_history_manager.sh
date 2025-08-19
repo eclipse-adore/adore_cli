@@ -108,69 +108,82 @@ prompt_user_action() {
     
     log_debug "Prompting user for action. Interactive: $(is_interactive && echo "true" || echo "false")"
     
-    printf "\n${BOLD}${YELLOW}=== DEVELOPMENT ENVIRONMENT CHANGE DETECTED ===${RESET}\n" >&2
-    printf "\n" >&2
-    printf "Detected change: ${CYAN}%s${RESET}\n" "$change_type" >&2
-    printf "\n" >&2
-    printf "Your current working environment ID:\n" >&2
-    printf "  ${GREEN}%s${RESET}\n" "$(echo "$old_tag" | sed 's/_/ /g' | cut -c1-60)..." >&2
-    printf "\n" >&2
-    printf "New calculated environment ID:\n" >&2
-    printf "  ${YELLOW}%s${RESET}\n" "$(echo "$new_tag" | sed 's/_/ /g' | cut -c1-60)..." >&2
-    printf "\n" >&2
+    # Ensure we're writing to the terminal and reading from it
+    exec 1>&2  # Redirect stdout to stderr so all output goes to terminal
     
-    printf "${BOLD}What would you like to do?${RESET}\n" >&2
-    printf "\n" >&2
-    printf "  ${GREEN}[C] Continue${RESET}\n" >&2
-    printf "      → Keep using your current working environment\n" >&2
-    printf "      → Ignore the detected changes for now\n" >&2
-    printf "      → Your development work continues uninterrupted\n" >&2
-    printf "\n" >&2
-    printf "  ${YELLOW}[B] Build${RESET}\n" >&2
-    printf "      → Build a new environment with your current changes\n" >&2
-    printf "      → Takes time but ensures latest dependencies\n" >&2
-    printf "      → Recommended if you need the changes to work\n" >&2
-    printf "\n" >&2
-    printf "  ${RED}[A] Abort${RESET}\n" >&2
-    printf "      → Cancel this operation and exit\n" >&2
-    printf "      → Nothing will be changed or started\n" >&2
-    printf "\n" >&2
-    printf "${BOLD}💡 Recommendation:${RESET} Choose [C] to continue with your working environment\n" >&2
-    printf "\n" >&2
+    printf "\n${BOLD}${YELLOW}=== DEVELOPMENT ENVIRONMENT CHANGE DETECTED ===${RESET}\n"
+    printf "\n"
+    printf "Detected change: ${CYAN}%s${RESET}\n" "$change_type"
+    printf "\n"
+    printf "Your current working environment ID:\n"
+    printf "  ${GREEN}%s${RESET}\n" "$(echo "$old_tag" | sed 's/_/ /g' | cut -c1-60)..."
+    printf "\n"
+    printf "New calculated environment ID:\n"
+    printf "  ${YELLOW}%s${RESET}\n" "$(echo "$new_tag" | sed 's/_/ /g' | cut -c1-60)..."
+    printf "\n"
+    
+    printf "${BOLD}What would you like to do?${RESET}\n"
+    printf "\n"
+    printf "  ${GREEN}[C] Continue${RESET}\n"
+    printf "      → Keep using your current working environment\n"
+    printf "      → Ignore the detected changes for now\n"
+    printf "      → Your development work continues uninterrupted\n"
+    printf "\n"
+    printf "  ${YELLOW}[B] Build${RESET}\n"
+    printf "      → Build a new environment with your current changes\n"
+    printf "      → Takes time but ensures latest dependencies\n"
+    printf "      → Recommended if you need the changes to work\n"
+    printf "\n"
+    printf "  ${RED}[A] Abort${RESET}\n"
+    printf "      → Cancel this operation and exit\n"
+    printf "      → Nothing will be changed or started\n"
+    printf "\n"
+    printf "${BOLD}💡 Recommendation:${RESET} Choose [C] to continue with your working environment\n"
+    printf "\n"
     
     local choice=""
     local attempts=0
     local max_attempts=3
     
     while [[ $attempts -lt $max_attempts ]]; do
-        printf "What action would you like to take? [c] Continue, [b] Build, [a] Abort > " >&2
-        read -r choice || {
-            log_error "Failed to read user input"
-            echo "abort"
-            return 1
-        }
+        printf "What action would you like to take? [c] Continue, [b] Build, [a] Abort > "
+        
+        # Try to read from /dev/tty if available, otherwise from stdin
+        if [[ -r /dev/tty ]]; then
+            read -r choice < /dev/tty || {
+                log_error "Failed to read user input from /dev/tty"
+                echo "abort"
+                return 1
+            }
+        else
+            read -r choice || {
+                log_error "Failed to read user input from stdin"
+                echo "abort"
+                return 1
+            }
+        fi
         
         local validated_choice
         validated_choice=$(validate_choice "$choice")
         
         case "$validated_choice" in
             keep)
-                printf "${GREEN}→ Continuing with your current working environment${RESET}\n" >&2
+                printf "${GREEN}→ Continuing with your current working environment${RESET}\n"
                 echo "keep"
                 return 0
                 ;;
             build)
-                printf "${YELLOW}→ Building new environment with current changes${RESET}\n" >&2
+                printf "${YELLOW}→ Building new environment with current changes${RESET}\n"
                 echo "build"
                 return 0
                 ;;
             abort)
-                printf "${RED}→ Aborting operation${RESET}\n" >&2
+                printf "${RED}→ Aborting operation${RESET}\n"
                 echo "abort"
                 return 0
                 ;;
             invalid)
-                printf "${RED}Invalid choice. Please enter c, b, or a${RESET}\n" >&2
+                printf "${RED}Invalid choice. Please enter c, b, or a${RESET}\n"
                 ((attempts++))
                 if [[ $attempts -ge $max_attempts ]]; then
                     log_error "Too many invalid attempts, aborting"
@@ -185,6 +198,7 @@ prompt_user_action() {
     echo "abort"
     return 1
 }
+
 
 # Function to save successful environment
 save_successful_environment() {

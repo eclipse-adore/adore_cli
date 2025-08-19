@@ -19,6 +19,11 @@ COMPOSE_BAKE?=true
 ROS_DISTRO:=jazzy
 OS_CODE_NAME:=noble
 
+USER_UID:=$(shell id -u)
+USER_GID:=$(shell id -g)
+UID:=${USER_UID}
+GID:=${USER_GID}
+
 # === INCLUDES ===
 include ${ROOT_DIR}/adore_cli.mk
 -include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
