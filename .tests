@@ -21,6 +21,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     if ! make run cmd="cd ros2_workspace/ && colcon build" >"$build_log_file" 2>&1; then
         status=$(bold $(red "FAILED"))
         message="        Build failed. See log: ${build_log_file}"
+        tail "${build_log_file}"
         printf "    Message:\n%s\n" "$message"
         printf "    %-77s %s\n" "Status:" "${status}"
         exit 1
