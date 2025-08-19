@@ -8,6 +8,8 @@ on:
 jobs:
   x86_64:
     name: Native x86_64
+    permissions:
+      packages: write
     uses: ./.github/workflows/reuse-build.yaml
     with:
       platform: 'ubuntu-latest'
@@ -16,6 +18,8 @@ jobs:
 
   arm64:
     name: Native ARM64
+    permissions:
+      packages: write
     uses: ./.github/workflows/reuse-build.yaml
     with:
       platform: 'ubuntu-24.04-arm'
