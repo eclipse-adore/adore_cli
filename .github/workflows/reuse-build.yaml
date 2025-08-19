@@ -109,7 +109,7 @@ jobs:
         if: always()
 
       - name: Push Base Images to Registry
-        if: github.event_name != 'pull_request' && github.repository == 'dlr-ts/adore_develop'
+        if: github.event_name != 'pull_request' && github.repository == 'eclipse-adore/adore_cli'
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
         shell: bash
