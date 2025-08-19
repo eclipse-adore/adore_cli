@@ -20,6 +20,11 @@ jobs:
   build:
     name: Build ADORe CLI
     runs-on: ${{ inputs.platform }}
+    permissions:
+      contents: write
+      actions: write
+      attestations: write
+      packages: write
 
     steps:
       - name: Init

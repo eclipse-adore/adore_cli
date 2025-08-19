@@ -1047,9 +1047,9 @@ try_pull_base_images:
 	    echo "✗ Core environment not found in registry"; \
 	fi
 
-.PHONY: push_base_images
-push_base_images:
-	@echo "=== Pushing base and core images to registry ==="
+.PHONY: push_base_image
+push_base_image:
+	@echo "=== Pushing base image to registry ==="
 	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
 	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
 	echo "Registry prefix: $${REGISTRY_PREFIX}"; \
@@ -1060,7 +1060,14 @@ push_base_images:
 	    echo "✓ Pushed base foundation"; \
 	else \
 	    echo "✗ Base foundation image not found locally"; \
-	fi; \
+	fi
+
+.PHONY: push_core_image
+push_core_image:
+	@echo "=== Pushing base image to registry ==="
+	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
+	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
+	echo "Registry prefix: $${REGISTRY_PREFIX}"; \
 	if docker image inspect "${ADORE_CLI_CORE_IMAGE}" >/dev/null 2>&1; then \
 	    echo "Tagging and pushing core environment: ${ADORE_CLI_CORE_IMAGE}"; \
 	    docker tag "${ADORE_CLI_CORE_IMAGE}" "$${REGISTRY_PREFIX}${ADORE_CLI_CORE_IMAGE}"; \
@@ -1156,7 +1163,8 @@ help_cli: ## Show ADORe CLI help
 	@echo "=== Registry Targets ==="
 	@echo "  registry_status    Check availability of images in registry"
 	@echo "  try_pull_base_images  Attempt to pull base/core from registry"
-	@echo "  push_base_images   Push base/core images to registry"
+	@echo "  push_base_image    Push base image to registry"
+	@echo "  push_core_image    Push core image to registry"
 	@echo ""
 	@echo "=== Information Targets ==="
 	@echo "  help_cli           Show this help message"
