@@ -1,7 +1,6 @@
 #!/bin/bash
 trap : TERM INT
 
-# Source setup script if it exists
 if [ -f /tmp/adore/setup.sh ]; then
     echo "Found setup.sh, sourcing..."
     export SHELL=/bin/bash

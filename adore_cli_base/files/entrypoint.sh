@@ -1,10 +1,8 @@
 #!/bin/bash
 trap : TERM INT
 
-# Source setup script if it exists
 if [ -f /tmp/adore/setup.sh ]; then
     echo "Found setup.sh, sourcing..."
-    # Set SHELL environment variable before sourcing
     export SHELL=/bin/bash
     source /tmp/adore/setup.sh || echo "Warning: Failed to source setup.sh"
 else

@@ -136,7 +136,7 @@ RUN echo "=== Generating requirements manifest ===" && \
 
 # === SUCCESS MARKER ===
 # Create a marker file to indicate successful build for later copying
-RUN echo "Build completed successfully at $(date)" > /tmp/.tmp/requirements/build_success.marker && \
+RUN echo "Build completed successfully" > /tmp/.tmp/requirements/build_success.marker && \
     echo "Core layer build complete - all requirements processed"
 
 WORKDIR /tmp/adore

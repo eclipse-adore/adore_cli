@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-# This script act as the main entrypoint for the adore_cli docker context.
-
 set -euo pipefail
 
 SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -29,16 +27,15 @@ fi
 
 clear
 
-
-#bash "${SCRIPT_DIRECTORY}/adore_cli_help.sh"
 cd "${ADORE_CLI_WORKING_DIRECTORY}"
 bash "/tmp/adore_cli/tools/adore_cli_motd.sh"
 printf "\n"
 bash "/tmp/adore_cli/tools/git_repo_status.sh"
+
+echo "=== Environment Status ==="
 bash "/tmp/adore_cli/tools/requirements_file_change_status.sh"
 bash "/tmp/adore_cli/tools/check_vendor_dependencies.sh"
 
 printf "\n"
 
 zsh -l
-

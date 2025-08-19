@@ -65,7 +65,6 @@ PARENT_IS_DIRTY:=$(shell cd ${SOURCE_DIRECTORY} && if [ -n "$$(git status --porc
 REQUIREMENTS_SHORT_HASH:=$(shell find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | xargs -r cat 2>/dev/null | sha256sum | cut -c1-7)
 
 # === PACKAGES HASH GENERATION ===
-# Hash only package names (basenames) for better determinism
 PACKAGES_SHORT_HASH:=$(shell find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | sort | xargs -r -I {} basename {} 2>/dev/null | sort | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
 
 # === MANIFEST PATHS ===
@@ -92,27 +91,39 @@ USER_GID := $(shell id -g)
 UID ?= $(USER_UID)
 GID ?= $(USER_GID)
 
+# === BRANCH SHORTENING LOGIC ===
+# Docker tags are limited to 128 characters, so we shorten branch names:
+# 1. Remove everything before and including "/" (e.g., feature/docs → docs)
+# 2. Truncate to max 20 characters
+# 3. Remove trailing underscores
+
+# Shortened branch names for tagging (max 20 chars, no prefixes)
+ADORE_CLI_BRANCH_SHORT:=$(shell echo "${ADORE_CLI_BRANCH}" | sed 's|.*/||' | cut -c1-20 | sed 's/_$$//')
+PARENT_BRANCH_SHORT:=$(shell echo "${PARENT_BRANCH}" | sed 's|.*/||' | cut -c1-20 | sed 's/_$$//')
+
 # === CORE TAGGING LOGIC ===
-# Base tags (always use adore_cli repo info)
-ADORE_CLI_BASE_TAG_CLEAN:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+# Base tags using shortened branch names
+ADORE_CLI_BASE_TAG_CLEAN:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
 ifeq ($(ADORE_CLI_IS_DIRTY),true)
     ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}_dirty
 else
     ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}
 endif
 
-# Core image tagging according to requirements (using uppercase RH)
+# Core image tagging with shortened branch names
 ifeq ($(PARENT_IS_ADORE_CLI),true)
-    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
 else
-    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_SHORT_HASH}
+    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH_SHORT}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_SHORT_HASH}
 endif
 
-# User image tagging with package hash, username, UID and GID (using uppercase PH)
+# User image tagging with shortened branch names and username truncation if needed
 ifeq ($(PARENT_IS_ADORE_CLI),true)
-    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${USER}_UID${USER_UID}GID${USER_GID}
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${USER}_UID${USER_UID}GID${USER_GID}
 else
-    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_SHORT_HASH}_PH${PACKAGES_SHORT_HASH}_${USER}_UID${USER_UID}GID${USER_GID}
+    # Truncate username to 8 chars to keep total tag length reasonable
+    USER_SHORT:=$(shell echo "${USER}" | cut -c1-8)
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH_SHORT}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_SHORT_HASH}_PH${PACKAGES_SHORT_HASH}_${USER_SHORT}_UID${USER_UID}GID${USER_GID}
 endif
 
 # Use default tags for runtime (simplified - no complex built tag logic)
@@ -313,74 +324,53 @@ _cli_smart_attach:
 	@echo "=== ADORe CLI Smart Attach ==="
 	@echo "Checking for environment changes..."
 	@echo ""
-	@# Generate current manifests for comparison  
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _generate_current_manifests_only
-	@# Check what type of changes we have
-	@REQUIREMENTS_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_requirements_manifest_changed 2>/dev/null || echo "true"); \
-	PACKAGES_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_packages_manifest_changed 2>/dev/null || echo "true"); \
-	echo "Requirements changed: $$REQUIREMENTS_CHANGED"; \
-	echo "Packages changed: $$PACKAGES_CHANGED"; \
-	echo ""; \
-	if [ "$$REQUIREMENTS_CHANGED" = "true" ] || [ "$$PACKAGES_CHANGED" = "true" ]; then \
-		if [ -f "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" ]; then \
-			echo "Environment changes detected, consulting tag history manager..."; \
-			LAST_SUCCESSFUL_TAG=""; \
-			LAST_SUCCESSFUL_TAG=$$(bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" get_last 2>/dev/null || echo ""); \
-			if [ -n "$$LAST_SUCCESSFUL_TAG" ]; then \
-				echo "Last successful environment: $$LAST_SUCCESSFUL_TAG"; \
-				echo "Current calculated environment: ${ADORE_CLI_TAG}"; \
-				echo ""; \
-				exec 9<&0 0</dev/tty; \
-				if [ "$$REQUIREMENTS_CHANGED" = "true" ]; then \
-					CHANGE_TYPE="Requirements files changed"; \
+	@if [ -f "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" ]; then \
+		LAST_SUCCESSFUL_TAG=$$(bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" get_last 2>/dev/null || echo ""); \
+		if [ -n "$$LAST_SUCCESSFUL_TAG" ]; then \
+			echo "Found tag history with last successful environment: $$LAST_SUCCESSFUL_TAG"; \
+			CALCULATED_TAG="${ADORE_CLI_TAG}"; \
+			echo "Current calculated environment: $$CALCULATED_TAG"; \
+			echo ""; \
+			if [ "$$LAST_SUCCESSFUL_TAG" = "$$CALCULATED_TAG" ]; then \
+				echo "✓ Environment unchanged since last successful build"; \
+				if docker image inspect "adore_cli:$$CALCULATED_TAG" >/dev/null 2>&1; then \
+					echo "✓ Required image exists"; \
+					make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
 				else \
-					CHANGE_TYPE="Package dependencies changed"; \
+					echo "✗ Required image missing, building..."; \
+					make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers; \
+					bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" save "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_TAG}" 2>/dev/null || true; \
+					make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
 				fi; \
-				echo "Change type: $$CHANGE_TYPE"; \
-				echo ""; \
-				echo "Options:"; \
-				echo "  [C] Continue with previous environment ($$LAST_SUCCESSFUL_TAG)"; \
-				echo "  [B] Build new environment with changes"; \
-				echo "  [A] Abort"; \
-				echo ""; \
-				printf "Choose [c/b/a]: "; \
-				read -r USER_CHOICE; \
-				exec 0<&9 9<&-; \
-				echo ""; \
-				case "$${USER_CHOICE,,}" in \
-					c|continue|"") \
-						echo "→ Continuing with previous environment"; \
-						ADORE_CLI_TAG="$$LAST_SUCCESSFUL_TAG" ADORE_CLI_IMAGE="adore_cli:$$LAST_SUCCESSFUL_TAG" ADORE_CLI_CONTAINER_NAME="adore_cli_$$LAST_SUCCESSFUL_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
-						;; \
-					b|build) \
-						echo "→ Building new environment with changes"; \
-						make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers; \
-						bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" save "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_TAG}" 2>/dev/null || true; \
-						make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
-						;; \
-					a|abort) \
-						echo "→ Aborted by user"; \
-						exit 1; \
-						;; \
-					*) \
-						echo "→ Invalid choice, aborting"; \
-						exit 1; \
-						;; \
-				esac; \
 			else \
-				echo "No previous successful environment found, building new one..."; \
-				make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers; \
-				bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" save "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_TAG}" 2>/dev/null || true; \
-				make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
+				chmod +x "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh"; \
+				bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "$$LAST_SUCCESSFUL_TAG" "$$CALCULATED_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
 			fi; \
 		else \
-			echo "Tag history manager not found, using fallback..."; \
-			make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _fallback_change_detection; \
+			echo "No tag history found, building new environment..."; \
+			make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers; \
+			bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" save "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_TAG}" 2>/dev/null || true; \
+			make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
 		fi; \
 	else \
-		echo "✓ No environment changes detected"; \
-		make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
+		echo "Tag history manager not found, using fallback..."; \
+		make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _fallback_change_detection; \
 	fi
+
+.PHONY: _execute_last_successful_environment
+_execute_last_successful_environment:
+	@echo "Using last successful environment: ${LAST_TAG}"
+	@# Extract core tag from last successful user tag
+	@LAST_CORE_TAG=$$(echo "${LAST_TAG}" | sed -E 's/^(.+)_PH[a-f0-9]{7}_.*$$/\1/'); \
+	if [[ "$$LAST_CORE_TAG" == "${LAST_TAG}" ]]; then \
+		LAST_CORE_TAG=$$(echo "${LAST_TAG}" | sed -E 's/^(.+)_[^_]+_UID.*$$/\1/'); \
+	fi; \
+	echo "Extracted core tag: $$LAST_CORE_TAG"; \
+	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action \
+		ADORE_CLI_TAG="${LAST_TAG}" \
+		ADORE_CLI_IMAGE="adore_cli:${LAST_TAG}" \
+		ADORE_CLI_CONTAINER_NAME="adore_cli_${LAST_TAG}" \
+		ADORE_CLI_CORE_IMAGE="adore_cli_core:$$LAST_CORE_TAG"
 
 .PHONY: _execute_environment_action
 _execute_environment_action:
@@ -492,7 +482,23 @@ start: adore_cli_setup adore_cli_start ## Start the ADORe CLI docker compose con
 stop: stop_adore_cli ## Stop ADORe CLI docker compose context if it is running
 
 .PHONY: run
-run: adore_cli_setup adore_cli_start adore_cli_run adore_cli_teardown ## Execute a command in the ADORe CLI context `make run cmd="<command to execute>"` 
+run: adore_cli_setup _run_non_interactive ## Execute a command in the ADORe CLI context `make run cmd="<command to execute>"` 
+
+.PHONY: _run_non_interactive
+_run_non_interactive:
+	@echo "=== ADORe CLI Non-Interactive Run ==="
+	@# For run target, always use current tags without prompting
+	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
+		echo "Required image not found: ${ADORE_CLI_IMAGE}"; \
+		echo "Building automatically for non-interactive run..."; \
+		FORCE_NON_INTERACTIVE=true make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_adore_cli_layers; \
+		if [ -f "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" ]; then \
+			bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" save "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_TAG}" 2>/dev/null || true; \
+		fi; \
+	fi
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_start
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_run
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_teardown
 
 .PHONY: adore_cli_up
 adore_cli_up: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardown 
