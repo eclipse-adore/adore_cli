@@ -595,7 +595,15 @@ _build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
 	@echo "  Clean and rebuild: make clean && make build"
 
 .PHONY: build_adore_cli
-build_adore_cli: _build_adore_cli_layers ## Build The ADORe CLI Docker Context
+build_adore_cli: _clean_tag_history _build_adore_cli_layers ## Build The ADORe CLI Docker Context
+
+.PHONY: _clean_tag_history
+_clean_tag_history:
+	@echo "Cleaning tag history for fresh build..."
+	@rm -f "${SOURCE_DIRECTORY}/.log/.adore_cli/tag_history"
+	@rm -f "${SOURCE_DIRECTORY}/.log/.adore_cli/last_successful_env"
+	@rm -f "${SOURCE_DIRECTORY}/.log/.adore_cli/adore_cli_tag_history"
+
 
 # === REBUILD TARGETS ===
 
