@@ -35,7 +35,7 @@ ADORE_CLI_PROJECT:=adore_cli
 ADORE_CLI_MAKEFILE_PATH:=$(shell realpath "$(shell dirname "$(lastword $(MAKEFILE_LIST))")")
 
 # Default GITHUB_REPOSITORY to prevent undefined variable warnings
-GITHUB_REPOSITORY?=dlr-ts/adore_develop
+GITHUB_REPOSITORY?=eclipse-adore/adore_cli
 
 # === PATH CONFIGURATION ===
 MAKE_GADGETS_PATH:=${ADORE_CLI_MAKEFILE_PATH}/make_gadgets
