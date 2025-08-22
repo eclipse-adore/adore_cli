@@ -17,6 +17,7 @@ SOURCE_DIRECTORY ?= ${ADORE_CLI_MAKEFILE_PATH}
 # Set other paths relative to SOURCE_DIRECTORY (not ROOT_DIR)
 SUBMODULES_PATH ?= ${SOURCE_DIRECTORY}/tools
 VENDOR_PATH ?= ${SOURCE_DIRECTORY}/vendor
+ADORE_CLI_LOG_DIRECTORY ?= ${SOURCE_DIRECTORY}/.log/.adore_cli
 
 # Determine if parent is adore_cli
 PARENT_IS_ADORE_CLI := $(shell [ "${SOURCE_DIRECTORY}" = "${ADORE_CLI_MAKEFILE_PATH}" ] && echo "true" || echo "false")
