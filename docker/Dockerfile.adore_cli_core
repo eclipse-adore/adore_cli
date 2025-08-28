@@ -50,9 +50,22 @@ RUN chown -R ${UID}:${GID} /home/${USER}
 
 RUN echo "${USER} ALL = NOPASSWD : /usr/sbin/rsyslogd, /usr/bin/apt-get, /usr/bin/apt, /usr/bin/python3, /usr/bin/apt-file, /usr/bin/apt-cache, /usr/bin/aptitude" >> /etc/sudoers
 
-RUN mkdir -p /var/log/ros2 && \
-    chmod -R 777 /var/log/ros2
-COPY docker/files/rsyslog.conf /etc/rsyslog.conf 
+RUN mkdir -p /var/log/ros2/rsyslog && \
+    mkdir -p /var/lib/rsyslog && \
+    chmod -R 755 /var/log/ros2 && \
+    chmod -R 755 /var/lib/rsyslog
+
+RUN groupadd -r syslog || true
+RUN usermod -aG syslog ${USER}
+
+RUN chown -R syslog:syslog /var/lib/rsyslog
+RUN chmod -R 775 /var/log/ros2
+RUN chgrp -R syslog /var/log/ros2
+
+COPY docker/files/rsyslog.conf.template /etc/rsyslog.conf.template 
+
+RUN chown -R ${UID}:${GID} /var/log/ros2 && \
+    chown -R ${UID}:${GID} /var/spool/rsyslog
 
 RUN mkdir -p /tmp/adore
 

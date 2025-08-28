@@ -2,8 +2,6 @@
 #
 # For more information install rsyslog-doc and see
 # /usr/share/doc/rsyslog-doc/html/configuration/index.html
-#
-# Default logging rules can be found in /etc/rsyslog.d/50-default.conf
 
 #################
 #### MODULES ####
@@ -13,12 +11,13 @@ module(load="imuxsock") # provides support for local system logging
 #module(load="immark")  # provides --MARK-- message capability
 
 # provides UDP syslog reception
-#module(load="imudp")
-#input(type="imudp" port="514")
+module(load="imudp")
+input(type="imudp" port="${RSYSLOG_PORT}")
 
-# provides TCP syslog reception
-#module(load="imtcp")
-#input(type="imtcp" port="514")
+# Forward to remote host if configured
+if "${RSYSLOG_FORWARD_HOST}" != "" then {
+    action(type="omfwd" target="${RSYSLOG_FORWARD_HOST}" port="${RSYSLOG_PORT}" protocol="${RSYSLOG_FORWARD_PROTOCOL}")
+}
 
 # provides kernel logging support and enable non-kernel klog messages
 module(load="imklog" permitnonkernelfacility="on")
@@ -31,25 +30,23 @@ $ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
 
 $RepeatedMsgReduction on
 
-$FileOwner syslog
-$FileGroup adm
-$FileCreateMode 0640
+# Set file ownership to container user (numeric values will be substituted)
+$FileOwner ${USER}
+$FileGroup ${USER}
+$FileCreateMode 0644
 $DirCreateMode 0755
 $Umask 0022
-$PrivDropToUser syslog
-$PrivDropToGroup syslog
 
-$WorkDirectory /var/spool/rsyslog
+$WorkDirectory /var/lib/rsyslog
 
 $IncludeConfig /etc/rsyslog.d/*.conf
 
-if $syslogtag contains 'ros2' then {
-    $RepeatedMsgReduction off
-    action(
-        type="omfile"
-        file="/var/log/ros2/ros2_syslog.log"
-    )
-    stop
-}
+# ROS2 logs to separate files by tag
+:syslogtag, contains, "ros2" /var/log/ros2/rsyslog/ros2_syslog.log
+& stop
 
+:syslogtag, contains, "telemetry" /var/log/ros2/rsyslog/telemetry_syslog.log
+& stop
 
+# Default catch-all for other syslog messages
+*.* /var/log/ros2/rsyslog/system.log
