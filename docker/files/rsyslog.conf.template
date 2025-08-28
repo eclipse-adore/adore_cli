@@ -10,14 +10,9 @@
 module(load="imuxsock") # provides support for local system logging
 #module(load="immark")  # provides --MARK-- message capability
 
-# provides UDP syslog reception
-module(load="imudp")
-input(type="imudp" port="${RSYSLOG_PORT}")
-
-# Forward to remote host if configured
-if "${RSYSLOG_FORWARD_HOST}" != "" then {
-    action(type="omfwd" target="${RSYSLOG_FORWARD_HOST}" port="${RSYSLOG_PORT}" protocol="${RSYSLOG_FORWARD_PROTOCOL}")
-}
+# provides UDP/TCP syslog reception (conditionally enabled)
+${UDP_INPUT_CONFIG}
+${TCP_INPUT_CONFIG}
 
 # provides kernel logging support and enable non-kernel klog messages
 module(load="imklog" permitnonkernelfacility="on")
@@ -30,7 +25,7 @@ $ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
 
 $RepeatedMsgReduction on
 
-# Set file ownership to container user (numeric values will be substituted)
+# Set file ownership to container user
 $FileOwner ${USER}
 $FileGroup ${USER}
 $FileCreateMode 0644
@@ -40,6 +35,11 @@ $Umask 0022
 $WorkDirectory /var/lib/rsyslog
 
 $IncludeConfig /etc/rsyslog.d/*.conf
+
+# Forward to remote host if configured
+if "${RSYSLOG_FORWARD_HOST}" != "" then {
+    action(type="omfwd" target="${RSYSLOG_FORWARD_HOST}" port="${RSYSLOG_FORWARD_PORT}" protocol="${RSYSLOG_FORWARD_PROTOCOL}")
+}
 
 # ROS2 logs to separate files by tag
 :syslogtag, contains, "ros2" /var/log/ros2/rsyslog/ros2_syslog.log
