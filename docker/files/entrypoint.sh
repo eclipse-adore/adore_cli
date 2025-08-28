@@ -57,10 +57,12 @@ echo "DEBUG: RSYSLOG_PROTOCOL='${RSYSLOG_PROTOCOL}'"
 echo "DEBUG: UDP_INPUT_CONFIG='${UDP_INPUT_CONFIG}'"
 echo "DEBUG: TCP_INPUT_CONFIG='${TCP_INPUT_CONFIG}'"
 
-envsubst '${UID} ${GID} ${USER} ${RSYSLOG_PORT} ${RSYSLOG_FORWARD_HOST} ${RSYSLOG_FORWARD_PORT} ${RSYSLOG_FORWARD_PROTOCOL} ${UDP_INPUT_CONFIG} ${TCP_INPUT_CONFIG}' < /etc/rsyslog.conf.template > /var/log/ros2/rsyslog/rsyslog.conf
+envsubst '${UID} ${GID} ${USER} ${RSYSLOG_PORT} ${RSYSLOG_FORWARD_HOST} ${RSYSLOG_FORWARD_PORT} ${RSYSLOG_FORWARD_PROTOCOL} ${UDP_INPUT_CONFIG} ${TCP_INPUT_CONFIG}' < /etc/rsyslog.conf.template > /tmp/rsyslog.conf
+
+chmod 644 /tmp/rsyslog.conf
 
 
-sudo rsyslogd -n -f /var/log/ros2/rsyslog/rsyslog.conf > /var/log/ros2/rsyslog/rsyslogd.log 2>&1 &
+sudo rsyslogd -n -f /tmp/rsyslog.conf > /var/log/ros2/rsyslog/rsyslogd.log 2>&1 &
 RSYSLOG_PID=$!
 
 shutdown() {
