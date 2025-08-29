@@ -4,6 +4,7 @@ trap : TERM INT
 
 echo "Starting ADORe CLI entrypoint..."
 
+
 mkdir -p /var/log/ros2/rsyslog
 chown -R ${UID:-1000}:${GID:-1000} /var/log/ros2
 
@@ -31,8 +32,38 @@ elif [ -f /tmp/adore/.env ]; then
     source /tmp/adore/.env
 fi
 
+# Display detection and virtual display setup
+XVFB_PID=""
+detect_display() {
+    if [ "${VIRTUAL_DISPLAY:-false}" = "true" ]; then
+        echo "VIRTUAL_DISPLAY=true, forcing virtual display"
+        return 1
+    fi
+    
+    # Check for connected displays
+    if [ -d "/sys/class/drm" ]; then
+        for status_file in /sys/class/drm/card*/status; do
+            if [ -f "$status_file" ] && [ "$(cat "$status_file" 2>/dev/null)" = "connected" ]; then
+                echo "Physical display detected"
+                return 0
+            fi
+        done
+    fi
+    
+    echo "No physical display detected"
+    return 1
+}
+
+
+if ! detect_display; then
+    echo "Starting virtual display on :99..."
+    Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset > /dev/null 2>&1 &
+    XVFB_PID=$!
+    echo "Virtual display started (PID: $XVFB_PID), DISPLAY=$DISPLAY"
+    sleep 2
+fi
+
 echo "Starting rsyslog daemon..."
-# Use consistent variable name
 export RSYSLOG_PROTOCOL=${RSYSLOG_PROTOCOL:-udp}
 
 if [ -n "${RSYSLOG_PORT:-}" ]; then
@@ -58,23 +89,27 @@ echo "DEBUG: UDP_INPUT_CONFIG='${UDP_INPUT_CONFIG}'"
 echo "DEBUG: TCP_INPUT_CONFIG='${TCP_INPUT_CONFIG}'"
 
 envsubst '${UID} ${GID} ${USER} ${RSYSLOG_PORT} ${RSYSLOG_FORWARD_HOST} ${RSYSLOG_FORWARD_PORT} ${RSYSLOG_FORWARD_PROTOCOL} ${UDP_INPUT_CONFIG} ${TCP_INPUT_CONFIG}' < /etc/rsyslog.conf.template > /tmp/rsyslog.conf
-
 chmod 644 /tmp/rsyslog.conf
-
-
+touch /var/log/ros2/rsyslog/rsyslogd.log
 sudo rsyslogd -n -f /tmp/rsyslog.conf > /var/log/ros2/rsyslog/rsyslogd.log 2>&1 &
 RSYSLOG_PID=$!
 
 shutdown() {
-    echo "Shutting down rsyslog..."
+    echo "Shutting down services..."
     sudo kill $RSYSLOG_PID 2>/dev/null || true
+    if [ -n "$XVFB_PID" ]; then
+        echo "Stopping virtual display..."
+        kill $XVFB_PID 2>/dev/null || true
+    fi
     exit 0
 }
-
 trap shutdown TERM INT
 
 echo "ADORe CLI ready"
 echo "Rsyslog PID: $RSYSLOG_PID"
 echo "Rsyslog logs: /var/log/ros2/rsyslog/rsyslogd.log"
+if [ -n "$XVFB_PID" ]; then
+    echo "Virtual display PID: $XVFB_PID"
+fi
 
 wait $RSYSLOG_PID

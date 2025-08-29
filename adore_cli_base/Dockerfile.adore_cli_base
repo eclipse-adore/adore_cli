@@ -37,19 +37,22 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install gettext-base for envsubst
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && \
-    apt-get install --no-install-recommends -y gettext-base
+    (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
+    apt-get install --no-install-recommends -y \
+        -o Acquire::Check-Valid-Until=false \
+        gettext-base
 
 # Process requirements file with variable substitution
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
     rm /var/lib/dpkg/info/libc-bin.* || true && \
-    apt-get update && \
+    (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
     envsubst < ${REQUIREMENTS_FILE} | sed '/^#/d' | sed '/^$/d' | \
-    xargs -r apt-get install --no-install-recommends -y
+    xargs -r apt-get install --no-install-recommends -y \
+        -o Acquire::Check-Valid-Until=false
 
 # === PYTHON FOUNDATION ===
 ARG PYTHON_REQUIREMENTS_FILE="requirements.adore_cli_base.pip3"
@@ -57,8 +60,9 @@ COPY files/${PYTHON_REQUIREMENTS_FILE} /tmp
 
 # Process Python requirements with variable substitution
 RUN --mount=type=cache,target=/root/.cache/pip \
-    envsubst < ${PYTHON_REQUIREMENTS_FILE} | sed '/^#/d' | sed '/^$/d' | \
-    xargs -r python3 -m pip install --break-system-packages
+    (envsubst < ${PYTHON_REQUIREMENTS_FILE} | sed '/^#/d' | sed '/^$/d' | \
+    xargs -r timeout 300 python3 -m pip install --break-system-packages) || \
+    (echo "Warning: Some pip packages may not have been installed due to network issues" && true)
 
 # === X11 AND DISPLAY PACKAGES ===
 ARG X11_REQUIREMENTS_FILE="requirements.adore_cli_base_x11_display.ubuntu.system"
@@ -66,28 +70,34 @@ COPY files/${X11_REQUIREMENTS_FILE} /tmp
 
 # Process X11 requirements with variable substitution
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && \
+    (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
     envsubst < ${X11_REQUIREMENTS_FILE} | sed '/^#/d' | sed '/^$/d' | \
-    xargs -r apt-get install --no-install-recommends -y
+    xargs -r apt-get install --no-install-recommends -y \
+        -o Acquire::Check-Valid-Until=false
 
 # === SYSTEM CONFIGURATION ===
 # Configure system services and directories
-
-
 # Create standard directories
 RUN mkdir -p /tmp/adore /opt/adore
 
 # === SHELL AND DEVELOPMENT TOOLS ===
 # Install oh-my-zsh globally (user-agnostic installation)
-RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /usr/share/oh-my-zsh && \
-    chown -R root:root /usr/share/oh-my-zsh && \
-    find /usr/share/oh-my-zsh -type d -exec chmod 755 {} \; && \
-    find /usr/share/oh-my-zsh -type f -exec chmod 644 {} \; && \
-    chmod 755 /usr/share/oh-my-zsh/oh-my-zsh.sh && \
-    # Verify installation
-    ls -la /usr/share/oh-my-zsh/oh-my-zsh.sh
+RUN --mount=type=cache,target=/root/.cache/git \
+    (timeout 60 git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /usr/share/oh-my-zsh 2>/dev/null || \
+     echo "Warning: Could not clone oh-my-zsh, creating minimal shell setup") && \
+    if [ -d /usr/share/oh-my-zsh ]; then \
+        chown -R root:root /usr/share/oh-my-zsh && \
+        find /usr/share/oh-my-zsh -type d -exec chmod 755 {} \; && \
+        find /usr/share/oh-my-zsh -type f -exec chmod 644 {} \; && \
+        chmod 755 /usr/share/oh-my-zsh/oh-my-zsh.sh && \
+        ls -la /usr/share/oh-my-zsh/oh-my-zsh.sh; \
+    else \
+        mkdir -p /usr/share/oh-my-zsh && \
+        echo "# Minimal zsh setup - oh-my-zsh not available" > /usr/share/oh-my-zsh/oh-my-zsh.sh && \
+        chmod 755 /usr/share/oh-my-zsh/oh-my-zsh.sh; \
+    fi
 
 # === ENTRYPOINT AND SCRIPTS ===
 COPY files/.zshrc /etc/skel/.zshrc

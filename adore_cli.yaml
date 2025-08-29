@@ -56,6 +56,7 @@ services:
     <<: *common-config
     image: ${ADORE_CLI_IMAGE}
     container_name: ${ADORE_CLI_CONTAINER_NAME}
+    pull_policy: missing  # Only pull base images if they don't exist locally
     
     # === ENVIRONMENT VARIABLES ===
     environment:
@@ -69,8 +70,7 @@ services:
       GID: ${USER_GID:-${GID}}
       ADORE_CLI_CORE_IMAGE: ${ADORE_CLI_CORE_IMAGE}
       ADORE_CLI_CONTAINER_NAME: ${ADORE_CLI_CONTAINER_NAME}
-      DISPLAY_MODE: ${DISPLAY_MODE:-native}
-      DISPLAY: ${DISPLAY}
+      DISPLAY: ${DISPLAY:-:0}
     
     # === BUILD CONFIGURATION ===
     # This builds the complete three-layer stack when needed
@@ -135,3 +135,8 @@ services:
 # NETWORKING:
 # - Host networking mode simplifies ROS2 multi-machine communication
 # - IPC and PID sharing enables advanced debugging and system integration
+#
+# PULL POLICY:
+# - pull_policy: missing - Only attempts to pull base images if they don't exist locally
+# - This prevents network failures when base images are already cached
+# - Reduces build times and enables offline development when images are pre-pulled

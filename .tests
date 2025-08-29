@@ -53,8 +53,9 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "        Are message contents being preserved correctly?\n"
     printf "    Starting rsyslog test...\n"
     
-    rm -rf .log/rsyslog/
-    
+    rm -rf .log/rsyslog/ros2_syslog.log
+    make start > /dev/null 2>&1;
+    sleep 5s
     if ! make run cmd="logger --tag ros2 'Hello World'" > /dev/null 2>&1; then
         status=$(bold $(red "FAILED"))
         message="        Logger command failed."
@@ -68,6 +69,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
         message="        Log file ${log_file} was not created."
         printf "    Message:\n%s\n" "$message"
         printf "    %-77s %s\n" "Status:" "${status}"
+        make stop > /dev/null 2>&1;
         exit 1
     fi
     
@@ -76,6 +78,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
         message="        Message 'Hello World' not found in ${log_file}."
         printf "    Message:\n%s\n" "$message"
         printf "    %-77s %s\n" "Status:" "${status}"
+        make stop > /dev/null 2>&1;
         exit 1
     fi
     
@@ -84,6 +87,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "    Message:\n%s\n" "$message"
     printf "    %-77s %s\n" "Status:" "${status}"
     printf "    Log file: %s\n" "$log_file"
+    make stop > /dev/null 2>&1;
     exit 0
 }
 
@@ -104,7 +108,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "        Are windows actually visible on the host display?\n"
     printf "    Starting Docker context...\n"
     
-    if ! make start; then
+    if ! make start > /dev/null 2>&1; then
         status=$(bold $(red "FAILED"))
         message="        Failed to start Docker context."
         printf "    Message:\n%s\n" "$message"
@@ -130,19 +134,19 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
         message="        Failed to launch test GUI application."
         printf "    Message:\n%s\n" "$message"
         printf "    %-77s %s\n" "Status:" "${status}"
-        make stop
+        make stop >/dev/null 2>&1
         exit 1
     fi
     
     sleep 2
     
     # Check if window is visible using xwininfo
-    if ! make run cmd="xwininfo -tree -root | grep -i xeyes"; then
+    if ! make run cmd="xwininfo -tree -root | grep -i xeyes" >/dev/null 2>&1; then
         status=$(bold $(red "FAILED"))
         message="        GUI window not found in X11 window tree."
         printf "    Message:\n%s\n" "$message"
         printf "    %-77s %s\n" "Status:" "${status}"
-        make stop
+        make stop >/dev/null 2>&1
         exit 1
     fi
     

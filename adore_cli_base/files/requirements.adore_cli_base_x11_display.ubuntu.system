@@ -4,3 +4,5 @@
 x11-apps
 xterm
 x11-utils
+x11-xserver-utils
+xvfb

@@ -680,6 +680,7 @@ rebuild_from_layer: ## Rebuild from specific layer onwards. Usage: make rebuild_
 .PHONY: _build_base_layer
 _build_base_layer: check_cross_compile_deps
 	@echo "Building base layer: ${ADORE_CLI_BASE_IMAGE}"
+	docker pull ros:${ROS_DISTRO}-ros-core-${OS_CODE_NAME} > /dev/null 2>&1 || true
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
 	    docker buildx build \
 	        --builder=default \

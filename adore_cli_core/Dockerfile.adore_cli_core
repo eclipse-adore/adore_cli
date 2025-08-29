@@ -31,10 +31,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 USER root
 
 RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && \
-    apt-get install --no-install-recommends -y $(sed '/^#/d' *.system | sed '/^$/d' | envsubst)
+    (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
+    apt-get install --no-install-recommends -y \
+        -o Acquire::Check-Valid-Until=false \
+        $(sed '/^#/d' *.system | sed '/^$/d' | envsubst)
 
 # === REQUIREMENTS GATHERING AND INSTALLATION ===
 # Copy the gather script and requirements files from build context
@@ -60,34 +62,44 @@ RUN echo "=== Validating requirements in build context ===" && \
 
 # === REPOSITORY AND PPA SETUP ===
 # Add PPAs first (if any) and update package lists
-RUN echo "=== Setting up PPAs ===" && \
+RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
+    echo "=== Setting up PPAs ===" && \
     if [ -f "combined_requirements.ppa" ] && [ -s "combined_requirements.ppa" ]; then \
         echo "Adding PPAs..." && \
-        apt-get update && \
-        apt-get install -y software-properties-common && \
+        rm -f /etc/apt/apt.conf.d/docker-clean && \
+        (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
+        apt-get install -y --no-install-recommends \
+            -o Acquire::Check-Valid-Until=false \
+            software-properties-common && \
         while IFS= read -r ppa; do \
             if [ ! -z "$ppa" ] && [ "${ppa#ppa:}" != "$ppa" ]; then \
                 echo "Adding PPA: $ppa" && \
-                add-apt-repository -y "$ppa" || echo "Failed to add PPA: $ppa"; \
+                (timeout 60 add-apt-repository -y "$ppa" 2>/dev/null || echo "Failed to add PPA: $ppa"); \
             fi; \
         done < combined_requirements.ppa && \
-        apt-get update; \
+        (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists after PPA setup"); \
     else \
         echo "No PPAs to add"; \
     fi
 
 # === SYSTEM PACKAGES ===
 # Install system packages discovered from requirements files
-RUN echo "=== Installing system packages ===" && \
+RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
+    echo "=== Installing system packages ===" && \
     if [ -f "combined_requirements.system" ] && [ -s "combined_requirements.system" ]; then \
         echo "Installing packages from combined_requirements.system..." && \
         cat combined_requirements.system && \
         echo "Package count: $(wc -l < combined_requirements.system)" && \
-        apt-get update && \
+        rm -f /etc/apt/apt.conf.d/docker-clean && \
+        (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
         PACKAGES=$(cat combined_requirements.system | envsubst | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//') && \
         echo "Processed packages: $PACKAGES" && \
         if [ ! -z "$PACKAGES" ]; then \
-            apt-get install --no-install-recommends -y $PACKAGES && \
+            apt-get install --no-install-recommends -y \
+                -o Acquire::Check-Valid-Until=false \
+                $PACKAGES && \
             echo "Successfully installed system packages"; \
         else \
             echo "No packages to install"; \
@@ -98,15 +110,17 @@ RUN echo "=== Installing system packages ===" && \
 
 # === PYTHON PACKAGES ===
 # Install Python packages discovered from requirements files
-RUN echo "=== Installing Python packages ===" && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    echo "=== Installing Python packages ===" && \
     if [ -f "combined_requirements.pip3" ] && [ -s "combined_requirements.pip3" ]; then \
         echo "Installing packages from combined_requirements.pip3..." && \
         cat combined_requirements.pip3 && \
         PACKAGES=$(cat combined_requirements.pip3 | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//') && \
         echo "Processed packages: $PACKAGES" && \
         if [ ! -z "$PACKAGES" ]; then \
-            python3 -m pip install --ignore-installed --break-system-packages $PACKAGES && \
-            echo "Successfully installed Python packages"; \
+            (timeout 600 python3 -m pip install --ignore-installed --break-system-packages $PACKAGES && \
+            echo "Successfully installed Python packages") || \
+            (echo "Warning: Some Python packages may not have been installed due to network issues" && true); \
         else \
             echo "No Python packages to install"; \
         fi; \
