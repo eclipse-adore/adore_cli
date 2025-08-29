@@ -74,8 +74,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
 
 # === SYSTEM CONFIGURATION ===
 # Configure system services and directories
-RUN mkdir -p /var/log/ros2 && chmod -R 777 /var/log/ros2
-COPY files/rsyslog.conf /etc/rsyslog.conf
+
 
 # Create standard directories
 RUN mkdir -p /tmp/adore /opt/adore
@@ -91,9 +90,7 @@ RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /usr/share/oh-my-
     ls -la /usr/share/oh-my-zsh/oh-my-zsh.sh
 
 # === ENTRYPOINT AND SCRIPTS ===
-COPY files/entrypoint.sh /entrypoint.sh
 COPY files/.zshrc /etc/skel/.zshrc
-RUN chmod +x /entrypoint.sh
 
 # === TRACING SETUP ===
 # Create tracing group (user-agnostic)

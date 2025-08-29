@@ -497,9 +497,21 @@ _run_non_interactive:
 			bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" save "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_TAG}" 2>/dev/null || true; \
 		fi; \
 	fi
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_start
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_run
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_teardown
+	@CONTAINER_WAS_RUNNING=false; \
+	if docker ps --filter "name=${ADORE_CLI_CONTAINER_NAME}" --format "{{.Names}}" | grep -q "^${ADORE_CLI_CONTAINER_NAME}$$"; then \
+		echo "Container ${ADORE_CLI_CONTAINER_NAME} is already running - using existing session"; \
+		CONTAINER_WAS_RUNNING=true; \
+	else \
+		echo "Container ${ADORE_CLI_CONTAINER_NAME} is not running - starting it for this command"; \
+		make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_start; \
+	fi; \
+	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_run; \
+	if [ "$$CONTAINER_WAS_RUNNING" = "false" ]; then \
+		echo "Stopping container that was started for this command"; \
+		make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_teardown; \
+	else \
+		echo "Leaving existing container running"; \
+	fi
 
 .PHONY: adore_cli_up
 adore_cli_up: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardown 
@@ -828,13 +840,15 @@ adore_cli_setup:
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.bash_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history.new
+	xhost +local:docker
 
 .PHONY: adore_cli_teardown
 adore_cli_teardown:
 	@echo "Running adore_cli teardown..."
-	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} down || true
-	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} rm -f || true
-	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} stop || true
+	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} down 2>/dev/null || true
+	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} rm -f 2>/dev/null || true
+	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} stop 2>/dev/null || true
+	xhost -local:docker
 
 .PHONY: adore_cli_start
 adore_cli_start:
@@ -1202,7 +1216,9 @@ help_cli: ## Show ADORe CLI help
 	@echo "  3. make show_changes          # See what changed"
 	@echo "  4. make rebuild_force         # Force complete rebuild"
 	@echo "  5. make rebuild_from_layer LAYER=core  # Rebuild from core layer"
-	@echo "  6. docker system prune -f    # Clean Docker cache if space issues"
+	@echo "  6. docker system prune -f     # Clean Docker cache if space issues"
+	@echo "  7. docker builder prune       # Stale docker cache can cause non-deterministic failures. Try pruning the docker builder cache."
+	@echo "  8. sudo systemctl restart docker # Frequent network changes such as WIFI changes can break docker routing causing random build failures."
 
 .PHONY: debug_hashes
 debug_hashes: ## Debug hash calculation

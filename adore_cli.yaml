@@ -30,6 +30,8 @@ x-common-environment: &common-environment
   USER: ${USER}
   UID: ${UID}
   GID: ${GID}
+  DISPLAY: ${DISPLAY:-:0}
+
 
 x-common-build-args: &common-build-args
   HOSTNAME: ${HOSTNAME:-ADORe-CLI}
@@ -90,6 +92,7 @@ services:
       - ${SOURCE_DIRECTORY}:${SOURCE_DIRECTORY}
       - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache
       - ${SOURCE_DIRECTORY}/.log/.adore_cli:/var/log/adore_cli
+      - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
     
     # === NETWORK CONFIGURATION ===
     extra_hosts:

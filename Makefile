@@ -60,6 +60,7 @@ clean:
 	@rm -rf adore_cli/packages_manifest.txt
 	@rm -rf adore_cli_core/.log
 	@rm -rf "${ADORE_CLI_LOG_DIRECTORY}"
+	@rm -rf "${ADORE_CLI_MAKEFILE_PATH}/.log/.adore_cli"
 
 	@echo "Removing ADORe CLI images..."
 	@docker rmi $$(docker images -q ${ADORE_CLI_BASE_IMAGE}) --force 2> /dev/null || true
