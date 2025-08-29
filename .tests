@@ -65,6 +65,8 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     fi
     sleep 2s
     
+    cat .log/rsyslog/rsyslogd.log
+    cat "${log_file}"
     if [[ ! -f "$log_file" ]]; then
         status=$(bold $(red "FAILED"))
         message="        Log file ${log_file} was not created."
