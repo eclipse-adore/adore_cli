@@ -841,7 +841,12 @@ adore_cli_setup:
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.bash_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history.new
-	xhost +local:docker
+	@if command -v xhost >/dev/null 2>&1; then \
+		echo "Configuring X11 access for Docker..."; \
+		xhost +local:docker; \
+	else \
+		echo "xhost not available - skipping X11 configuration (headless mode)"; \
+	fi
 
 .PHONY: adore_cli_teardown
 adore_cli_teardown:
@@ -849,7 +854,12 @@ adore_cli_teardown:
 	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} down 2>/dev/null || true
 	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} rm -f 2>/dev/null || true
 	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} stop 2>/dev/null || true
-	xhost -local:docker
+	@if command -v xhost >/dev/null 2>&1; then \
+		echo "Removing X11 access for Docker..."; \
+		xhost -local:docker; \
+	else \
+		echo "xhost not available - skipping X11 cleanup"; \
+	fi
 
 .PHONY: adore_cli_start
 adore_cli_start:
