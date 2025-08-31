@@ -34,11 +34,18 @@ $Umask 0022
 
 $WorkDirectory /tmp/adore/.log/rsyslog
 
+$IncludeConfig /etc/rsyslog.d/*.conf
 
 # Forward to remote host if configured
 if "${RSYSLOG_FORWARD_HOST}" != "" then {
     action(type="omfwd" target="${RSYSLOG_FORWARD_HOST}" port="${RSYSLOG_FORWARD_PORT}" protocol="${RSYSLOG_FORWARD_PROTOCOL}")
 }
+
+auth.* /dev/null
+& stop
+kern.* /dev/null
+& stop
+
 
 # ROS2 logs to separate files by tag
 :syslogtag, contains, "ros2" /var/log/ros2/rsyslog/ros2_syslog.log

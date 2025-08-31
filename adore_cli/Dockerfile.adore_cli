@@ -69,10 +69,11 @@ RUN usermod -aG tracing ${USER}
 # Configure sudo access
 ## rsyslog config
 RUN echo "${USER} ALL = NOPASSWD : /usr/sbin/rsyslogd, /usr/bin/apt-get, /usr/bin/apt, /usr/bin/python3, /usr/bin/apt-file, /usr/bin/apt-cache, /usr/bin/aptitude" >> /etc/sudoers && \
-    mkdir -p /var/log/ros2/rsyslog /var/lib/rsyslog && \
+    mkdir -p /var/log/ros2/rsyslog /var/lib/rsyslog /var/log/syslog && \
     chmod -R 755 /var/log/ros2 /var/lib/rsyslog && \
     (getent group syslog || groupadd -r syslog) && \
     usermod -aG syslog ${USER} && \
+    chown -R syslog:syslog /var/log/syslog && \
     chown -R syslog:syslog /var/lib/rsyslog && \
     chmod -R 775 /var/log/ros2 && \
     chgrp -R syslog /var/log/ros2 && \
