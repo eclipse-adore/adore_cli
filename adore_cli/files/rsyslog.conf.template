@@ -32,7 +32,7 @@ $FileCreateMode 0644
 $DirCreateMode 0755
 $Umask 0022
 
-$WorkDirectory /var/lib/rsyslog
+$WorkDirectory /tmp/adore/.log/rsyslog
 
 $IncludeConfig /etc/rsyslog.d/*.conf
 
