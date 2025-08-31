@@ -34,7 +34,6 @@ $Umask 0022
 
 $WorkDirectory /tmp/adore/.log/rsyslog
 
-$IncludeConfig /etc/rsyslog.d/*.conf
 
 # Forward to remote host if configured
 if "${RSYSLOG_FORWARD_HOST}" != "" then {
