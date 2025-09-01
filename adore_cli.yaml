@@ -12,7 +12,7 @@
 # These YAML anchors reduce duplication and ensure consistency
 
 x-common-config: &common-config
-  privileged: true
+  privileged: false
   platform: ${DOCKER_PLATFORM:-linux/amd64}
   user: ${USER}
   hostname: ${HOSTNAME:-ADORe-CLI}

@@ -92,6 +92,7 @@ chown ${UID:-1000}:${GID:-1000} "$RSYSLOG_CONFIG"
 # Only create the rsyslogd.log file
 touch /var/log/ros2/rsyslog/rsyslogd.log
 sudo rsyslogd -n -f "$RSYSLOG_CONFIG" > /var/log/ros2/rsyslog/rsyslogd.log 2>&1 &
+rsyslogd -n -f "$RSYSLOG_CONFIG" > /var/log/ros2/rsyslog/rsyslogd.log 2>&1 &
 RSYSLOG_PID=$!
 
 shutdown() {
