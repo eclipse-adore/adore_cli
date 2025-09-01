@@ -34,7 +34,7 @@ $Umask 0022
 
 $WorkDirectory /tmp/adore/.log/rsyslog
 
-$IncludeConfig /etc/rsyslog.d/*.conf
+##$IncludeConfig /etc/rsyslog.d/*.conf
 
 auth,authpriv.* stop
 kern.* stop
