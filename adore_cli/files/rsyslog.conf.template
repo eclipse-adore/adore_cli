@@ -36,6 +36,11 @@ $WorkDirectory /tmp/adore/.log/rsyslog
 
 $IncludeConfig /etc/rsyslog.d/*.conf
 
+auth.* /dev/null
+& stop
+kern.* /dev/null
+& stop
+
 # Forward to remote host if configured
 if "${RSYSLOG_FORWARD_HOST}" != "" then {
     action(type="omfwd" target="${RSYSLOG_FORWARD_HOST}" port="${RSYSLOG_FORWARD_PORT}" protocol="${RSYSLOG_FORWARD_PROTOCOL}")

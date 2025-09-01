@@ -93,6 +93,8 @@ services:
       - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache
       - ${SOURCE_DIRECTORY}/.log/.adore_cli:/var/log/adore_cli
       - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
+      - ${SOURCE_DIRECTORY}/.log:/home/${USER}/.log
+
     
     # === NETWORK CONFIGURATION ===
     extra_hosts:

@@ -73,5 +73,9 @@ clean:
 
 # === TEST TARGETS ===
 
+.PHONY: logs
+logs:
+	docker logs "$$(make container_name_adore_cli)"
+
 .PHONY: test
 test: ci_test
