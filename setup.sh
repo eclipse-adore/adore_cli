@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ROS2_WORKSPACE_DIRECTORY="$(realpath "${SCRIPT_DIRECTORY}/ros2_workspace")"
@@ -9,4 +9,7 @@ else
     DISPLAY=${DISPLAY:-:0}
 fi
 
-source /opt/ros/${ROS_DISTRO}/setup.bash
+if [[ -z "$ROS_SETUP_SOURCED" ]]; then
+    source /opt/ros/${ROS_DISTRO}/setup.zsh
+    export ROS_SETUP_SOURCED=1
+fi

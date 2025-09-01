@@ -45,5 +45,4 @@ bash "/tmp/adore_cli/tools/check_vendor_dependencies.sh"
 
 printf "\n"
 
-set -x
 exec zsh -l
