@@ -116,7 +116,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "        Are windows actually visible on the host display?\n"
     printf "    Starting Docker context...\n"
     
-    if ! make start > /dev/null 2>&1; then
+    if ! make start; then
         status=$(bold $(red "FAILED"))
         message="        Failed to start Docker context."
         printf "    Message:\n%s\n" "$message"
