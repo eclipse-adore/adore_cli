@@ -36,10 +36,11 @@ $WorkDirectory /tmp/adore/.log/rsyslog
 
 $IncludeConfig /etc/rsyslog.d/*.conf
 
-auth.* /dev/null
-& stop
-kern.* /dev/null
-& stop
+auth,authpriv.* stop
+kern.* stop
+mail.* stop
+cron.* stop
+
 
 # Forward to remote host if configured
 if "${RSYSLOG_FORWARD_HOST}" != "" then {
