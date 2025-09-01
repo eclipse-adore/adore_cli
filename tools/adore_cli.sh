@@ -40,8 +40,10 @@ bash "/tmp/adore_cli/tools/git_repo_status.sh"
 
 echo "=== Environment Status ==="
 bash "/tmp/adore_cli/tools/requirements_file_change_status.sh"
+echo "test1"
 bash "/tmp/adore_cli/tools/check_vendor_dependencies.sh"
 
 printf "\n"
 
-zsh -l
+set -x
+exec zsh -l
