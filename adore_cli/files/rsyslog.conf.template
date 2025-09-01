@@ -60,5 +60,6 @@ kern.* /dev/null
 :syslogtag, contains, "telemetry" /var/log/ros2/rsyslog/telemetry_syslog.log
 & stop
 
-# Default catch-all for other syslog messages
-*.* /var/log/ros2/rsyslog/system.log
+# STOP ALL OTHER MESSAGES - do not create any other log files
+# This prevents system.log, kern.log, auth.log from being created
+*.* stop
