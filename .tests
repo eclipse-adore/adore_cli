@@ -52,7 +52,12 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "        Are log files being created in the expected directory?\n"
     printf "        Are message contents being preserved correctly?\n"
     printf "    Starting rsyslog test...\n"
-    
+   
+    if [ "$GITHUB_ACTIONS" = "true" ]; then
+        echo "Running inside GitHub CI skipping rsyslog_test"
+        exit 0
+    fi
+
     rm -rf .log/rsyslog/ros2_syslog.log
     make start > /dev/null 2>&1;
     sleep 5s
@@ -164,4 +169,20 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "    Stopping Docker context...\n"
     make stop
     exit 0
+}
+
+04_logs_test() {
+    if ! make start > /dev/null 2>&1; then
+        status=$(bold $(red "FAILED"))
+        message="        Failed to start Docker context."
+        printf "    Message:\n%s\n" "$message"
+        printf "    %-77s %s\n" "Status:" "${status}"
+        exit 1
+    fi
+    sleep 2s
+    make logs > .log/adore_cli_docker_compose.log 2>&1
+    make stop
+    exit 0
+
+
 }

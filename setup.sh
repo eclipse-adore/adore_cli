@@ -10,6 +10,22 @@ else
 fi
 
 if [[ -z "$ROS_SETUP_SOURCED" ]]; then
-    source /opt/ros/${ROS_DISTRO}/setup.zsh
+    case "$SHELL" in
+        */zsh)
+            source /opt/ros/${ROS_DISTRO}/setup.zsh
+            ;;
+        */bash)
+            source /opt/ros/${ROS_DISTRO}/setup.bash
+            ;;
+        */sh)
+            # fallback, most setups provide setup.sh
+            . /opt/ros/${ROS_DISTRO}/setup.sh
+            ;;
+        *)
+            # default fallback
+            . /opt/ros/${ROS_DISTRO}/setup.sh
+            ;;
+    esac
     export ROS_SETUP_SOURCED=1
 fi
+

@@ -26,14 +26,11 @@ $ActionFileDefaultTemplate RSYSLOG_TraditionalFileFormat
 $RepeatedMsgReduction on
 
 # Set file ownership to container user
+$FileOwner ${USER}
+$FileGroup ${USER}
 $FileCreateMode 0644
 $DirCreateMode 0755
 $Umask 0022
-#$FileOwner ${USER}
-#$FileGroup ${USER}
-#$FileCreateMode 0644
-#$DirCreateMode 0755
-#$Umask 0022
 
 $WorkDirectory /tmp/adore/.log/rsyslog
 
