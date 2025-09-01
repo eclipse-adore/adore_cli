@@ -94,6 +94,8 @@ services:
       - ${SOURCE_DIRECTORY}/.log/.adore_cli:/var/log/adore_cli
       - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
       - ${SOURCE_DIRECTORY}/.log:/home/${USER}/.log
+      - ${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro
+      - ${HOME}/.ssh:/home/${USER}/.ssh:ro
 
     
     # === NETWORK CONFIGURATION ===
