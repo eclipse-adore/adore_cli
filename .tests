@@ -18,7 +18,8 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "        Are all dependencies resolved correctly?\n"
     printf "    Starting build...\n"
 
-    if ! make run cmd="cd ros2_workspace/ && colcon build" >"$build_log_file" 2>&1; then
+    if ! make run cmd="cd ros2_workspace/ && colcon build"; then
+    #if ! make run cmd="cd ros2_workspace/ && colcon build" >"$build_log_file" 2>&1; then
         status=$(bold $(red "FAILED"))
         message="        Build failed. See log: ${build_log_file}"
         tail "${build_log_file}"
