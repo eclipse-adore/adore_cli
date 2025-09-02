@@ -54,6 +54,7 @@ save: save_docker_images ## Save all ADORe Docker images to disk in .docker_cach
 .PHONY: clean
 clean:
 	@echo "Cleaning build artifacts and Docker images..."
+	make stop || true
 	@rm -rf build
 	@rm -rf adore_cli/.tmp
 	@rm -rf adore_cli/packages
