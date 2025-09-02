@@ -18,7 +18,6 @@ SOURCE_DIRECTORY ?= ${ADORE_CLI_MAKEFILE_PATH}
 SUBMODULES_PATH ?= ${SOURCE_DIRECTORY}/tools
 VENDOR_PATH ?= ${SOURCE_DIRECTORY}/vendor
 ADORE_CLI_LOG_DIRECTORY ?= ${SOURCE_DIRECTORY}/.log/.adore_cli
-LOG_DIRECTORY ?= ${SOURCE_DIRECTORY}/.log/.adore_cli
 
 # Determine if parent is adore_cli
 PARENT_IS_ADORE_CLI := $(shell [ "${SOURCE_DIRECTORY}" = "${ADORE_CLI_MAKEFILE_PATH}" ] && echo "true" || echo "false")
@@ -54,15 +53,13 @@ CROSS_COMPILE ?= $(shell if [ "$(shell uname -m)" != "$(ARCH)" ]; then echo "tru
 MINIMUM_DOCKER_VERSION=28
 
 # === GIT AND BRANCH CONFIGURATION FOR ADORE CLI REPO ===
-ADORE_CLI_BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>>${LOG_DIRECTORY}/branch_name_error.log || echo NOBRANCH)
-#ADORE_CLI_SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
-ADORE_CLI_SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>>${LOG_DIRECTORY}/git_hash_error.log || echo NOHASH)
+ADORE_CLI_BRANCH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
+ADORE_CLI_SHORT_HASH:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
 ADORE_CLI_IS_DIRTY:=$(shell cd ${ADORE_CLI_MAKEFILE_PATH} && if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then echo "true"; else echo "false"; fi)
 
 # === GIT AND BRANCH CONFIGURATION FOR PARENT REPO ===
-PARENT_BRANCH?= $(shell bash $(MAKE_GADGETS_PATH)/tools/branch_name.sh 2>>${LOG_DIRECTORY}/branch_name_error.log || echo NOBRANCH)
-#PARENT_SHORT_HASH?=$(shell git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
-PARENT_SHORT_HASH?=$(shell git rev-parse --short HEAD 2>>${LOG_DIRECTORY}/git_hash_error.log || echo NOHASH)
+PARENT_BRANCH?= $(shell bash $(MAKE_GADGETS_PATH)/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
+PARENT_SHORT_HASH?=$(shell git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
 PARENT_IS_DIRTY:=$(shell cd ${SOURCE_DIRECTORY} && if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then echo "true"; else echo "false"; fi)
 
 # === REQUIREMENTS HASH GENERATION ===
@@ -839,9 +836,9 @@ _check_and_build_user:
 .PHONY: adore_cli_setup
 adore_cli_setup: 
 	@echo "Running adore_cli setup... SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
+	@touch ${HOME}/.gitconfig
 	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.log/.adore_cli
 	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.ccache
-	@touch ${HOME}/.gitconfig
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.bash_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history.new
