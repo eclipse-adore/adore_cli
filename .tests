@@ -86,10 +86,6 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "    %-77s %s\n" "Status:" "${status}"
     printf "    See the build log for more info: %s\n" "$build_log_file"
 
-
-    cat ${LOG_DIRECTORY}/branch_name_error.log
-    cat ${LOG_DIRECTORY}/git_hash_error.log
-
     exit 0
 }
 
@@ -127,8 +123,6 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     fi
     sleep 2s
     
-    cat .log/rsyslog/rsyslogd.log
-    cat "${log_file}"
     if [[ ! -f "$log_file" ]]; then
         status=$(bold $(red "FAILED"))
         message="        Log file ${log_file} was not created."
@@ -178,8 +172,6 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
         message="        Failed to start Docker context."
         printf "    Message:\n%s\n" "$message"
         printf "    %-77s %s\n" "Status:" "${status}"
-        cat ${LOG_DIRECTORY}/branch_name_error.log
-        cat ${LOG_DIRECTORY}/git_hash_error.log
         exit 1
     fi
     
