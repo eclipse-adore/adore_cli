@@ -841,6 +841,7 @@ adore_cli_setup:
 	@echo "Running adore_cli setup... SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
 	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.log/.adore_cli
 	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.ccache
+	@touch ${HOME}/.gitconfig
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.bash_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history.new
