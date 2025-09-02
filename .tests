@@ -25,9 +25,20 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
         printf "    %-77s %s\n" "Status:" "${status}"
         exit 1
     fi
-    
-    if grep -q "NOBRANCH\|NOHASH" "$start_log_file"; then
+    make stop
+
+    if ! make run cmd="ls -la">> "$start_log_file" 2>&1; then
         status=$(bold $(red "FAILED"))
+        message="        Make run command failed. See log: ${start_log_file}"
+        tail "${start_log_file}"
+        printf "    Message:\n%s\n" "$message"
+        printf "    %-77s %s\n" "Status:" "${status}"
+        exit 1
+    fi
+
+
+    if grep -q "NOBRANCH\|NOHASH" "$start_log_file"; then
+        status=$(startbold $(red "FAILED"))
         message="        Output contains NOBRANCH or NOHASH. See log: ${start_log_file}"
         grep "NOBRANCH\|NOHASH" "$start_log_file"
         printf "    Message:\n%s\n" "$message"
@@ -74,6 +85,10 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "    Message:\n%s\n" "$message"
     printf "    %-77s %s\n" "Status:" "${status}"
     printf "    See the build log for more info: %s\n" "$build_log_file"
+
+
+    cat ${LOG_DIRECTORY}/branch_name_error.log
+    cat ${LOG_DIRECTORY}/git_hash_error.log
 
     exit 0
 }
