@@ -121,6 +121,7 @@ jobs:
           
           make registry_status || true
           make push_base_image
+          make push_core_image
           
           echo "Images published successfully"
 
