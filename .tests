@@ -2,7 +2,48 @@
 
 LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
 
-01_build_hello_world_test() {
+01_make_start_test() {
+    local action=make_start
+    local name="Make Start Test"
+    local description="This test runs make start and validates output for version information."
+    local status=""
+    local message=""
+    local start_log_file="${LOG_DIRECTORY}/make_start.log"
+    printf "\n"
+    printf "  Test: %s\n" "${name}"
+    printf "    Description: %s\n" "${description}"
+    printf "      This test aims to answer the following questions: \n"
+    printf "        Does make start execute without NOBRANCH or NOHASH output?\n"
+    printf "        Are version identifiers properly configured?\n"
+    printf "    Starting make start...\n"
+    
+    if ! make start >"$start_log_file" 2>&1; then
+        status=$(bold $(red "FAILED"))
+        message="        Make start command failed. See log: ${start_log_file}"
+        tail "${start_log_file}"
+        printf "    Message:\n%s\n" "$message"
+        printf "    %-77s %s\n" "Status:" "${status}"
+        exit 1
+    fi
+    
+    if grep -q "NOBRANCH\|NOHASH" "$start_log_file"; then
+        status=$(bold $(red "FAILED"))
+        message="        Output contains NOBRANCH or NOHASH. See log: ${start_log_file}"
+        grep "NOBRANCH\|NOHASH" "$start_log_file"
+        printf "    Message:\n%s\n" "$message"
+        printf "    %-77s %s\n" "Status:" "${status}"
+        exit 1
+    fi
+    
+    status=$(bold $(green "PASSED"))
+    message="        Make start succeeded without version issues."
+    printf "    Message:\n%s\n" "$message"
+    printf "    %-77s %s\n" "Status:" "${status}"
+    printf "    See the start log for more info: %s\n" "$start_log_file"
+    exit 0
+}
+
+02_build_hello_world_test() {
     local action=build_hello_world
     local name="Build Hello World Test"
     local description="This test builds the ros2_hello_world package."
@@ -37,7 +78,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     exit 0
 }
 
-02_rsyslog_test() {
+03_rsyslog_test() {
     local action=rsyslog_test
     local name="Rsyslog Configuration Test"
     local description="This test validates rsyslog is properly configured to capture ROS2 messages."
@@ -100,7 +141,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     exit 0
 }
 
-03_x11_integration_test() {
+04_x11_integration_test() {
     local action=x11_integration_test
     local name="X11 Integration Test"
     local description="This test validates X11 forwarding is working by launching a GUI application."
@@ -122,6 +163,8 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
         message="        Failed to start Docker context."
         printf "    Message:\n%s\n" "$message"
         printf "    %-77s %s\n" "Status:" "${status}"
+        cat ${LOG_DIRECTORY}/branch_name_error.log
+        cat ${LOG_DIRECTORY}/git_hash_error.log
         exit 1
     fi
     
@@ -172,7 +215,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     exit 0
 }
 
-04_logs_test() {
+05_logs_test() {
     if ! make start > /dev/null 2>&1; then
         status=$(bold $(red "FAILED"))
         message="        Failed to start Docker context."
