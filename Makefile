@@ -60,6 +60,9 @@ clean:
 	@rm -rf adore_cli/packages
 	@rm -rf adore_cli/packages_manifest.txt
 	@rm -rf adore_cli_core/.log
+	@rm -rf ros2_workspace/build
+	@rm -rf ros2_workspace/install
+	@rm -rf ros2_workspace/log
 	@rm -rf "${ADORE_CLI_LOG_DIRECTORY}"
 	@rm -rf "${ADORE_CLI_MAKEFILE_PATH}/.log/.adore_cli"
 
