@@ -63,7 +63,8 @@ PARENT_SHORT_HASH?=$(shell git rev-parse --short HEAD 2>/dev/null || echo NOHASH
 PARENT_IS_DIRTY:=$(shell cd ${SOURCE_DIRECTORY} && if [ -n "$$(git status --porcelain 2>/dev/null)" ]; then echo "true"; else echo "false"; fi)
 
 # === REQUIREMENTS HASH GENERATION ===
-REQUIREMENTS_SHORT_HASH:=$(shell find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | xargs -r cat 2>/dev/null | sha256sum | cut -c1-7)
+REQUIREMENTS_HASH_FULL:=$(shell bash ${ADORE_CLI_MAKEFILE_PATH}/tools/requirements_hashing_util.sh hash "${SOURCE_DIRECTORY}")
+REQUIREMENTS_HASH_SHORT:=$(shell echo "${REQUIREMENTS_HASH_FULL}" | cut -c1-7)
 
 # === PACKAGES HASH GENERATION ===
 PACKAGES_SHORT_HASH:=$(shell find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | sort | xargs -r -I {} basename {} 2>/dev/null | sort | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
@@ -115,7 +116,7 @@ endif
 ifeq ($(PARENT_IS_ADORE_CLI),true)
     ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
 else
-    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH_SHORT}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_SHORT_HASH}
+    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_SHORT_HASH}_RH${REQUIREMENTS_HASH_SHORT}
 endif
 
 # User image tagging with shortened branch names and username truncation if needed
@@ -124,7 +125,7 @@ ifeq ($(PARENT_IS_ADORE_CLI),true)
 else
     # Truncate username to 8 chars to keep total tag length reasonable
     USER_SHORT:=$(shell echo "${USER}" | cut -c1-8)
-    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH_SHORT}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_SHORT_HASH}_PH${PACKAGES_SHORT_HASH}_${USER_SHORT}_UID${USER_UID}GID${USER_GID}
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH_SHORT}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_HASH_SHORT}_PH${PACKAGES_SHORT_HASH}_${USER_SHORT}_UID${USER_UID}GID${USER_GID}
 endif
 
 # Use default tags for runtime (simplified - no complex built tag logic)
@@ -177,9 +178,9 @@ _generate_current_manifests_only:
 .PHONY: _generate_requirements_manifest
 _generate_requirements_manifest:
 	@echo "Generating requirements manifest..."
+	@echo "  Using source directory: ${SOURCE_DIRECTORY}"
 	@mkdir -p "$(shell dirname ${REQUIREMENTS_MANIFEST})"
-	@find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) \
-		! -path "*/ros_translator/*" \
+	@(cd "${SOURCE_DIRECTORY}" && find . -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) \
 		! -path "*/.log/*" \
 		! -path "*/.git/*" \
 		! -path "*/build/*" \
@@ -187,20 +188,10 @@ _generate_requirements_manifest:
 		2>/dev/null | \
 		sort | \
 		xargs -r sha256sum 2>/dev/null | \
-		sort > "${REQUIREMENTS_MANIFEST}" || touch "${REQUIREMENTS_MANIFEST}"
-
-.PHONY: _generate_packages_manifest
-_generate_packages_manifest:
-	@echo "Generating packages manifest..."
-	@mkdir -p "$(shell dirname ${PACKAGES_MANIFEST})"
-	@if [ -d "${VENDOR_PATH}" ]; then \
-		find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | \
-		sort | \
-		xargs -r sha256sum 2>/dev/null | \
-		sort > "${PACKAGES_MANIFEST}"; \
-	else \
-		touch "${PACKAGES_MANIFEST}"; \
-	fi
+		sed "s|  ${SOURCE_DIRECTORY}/|  |g" | \
+		sed 's|  \./|  |g' | \
+		sort) > "${REQUIREMENTS_MANIFEST}" || touch "${REQUIREMENTS_MANIFEST}"
+	@echo "  Generated: ${REQUIREMENTS_MANIFEST}"
 
 .PHONY: _save_manifests
 _save_manifests:
@@ -256,7 +247,7 @@ _determine_actual_build_tags:
 	@echo "=== Tag Determination Logic ==="
 	@echo "Parent is ADORe CLI: ${PARENT_IS_ADORE_CLI}"
 	@echo "Parent repo dirty: ${PARENT_IS_DIRTY}"
-	@echo "Requirements short hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "Requirements short hash: ${REQUIREMENTS_HASH_SHORT}"
 	@echo "Packages short hash: ${PACKAGES_SHORT_HASH}"
 	@echo "User: ${USER}"
 	@REQUIREMENTS_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_requirements_manifest_changed); \
@@ -530,7 +521,7 @@ _build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
 	@echo "ADORe CLI dirty: ${ADORE_CLI_IS_DIRTY}"
 	@echo "Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
 	@echo "Parent dirty: ${PARENT_IS_DIRTY}"
-	@echo "Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "Requirements hash: ${REQUIREMENTS_HASH_SHORT}"
 	@echo "Packages hash: ${PACKAGES_SHORT_HASH}"
 	@echo "User: ${USER} (UID: ${USER_UID}, GID: ${USER_GID})"
 	@echo ""
@@ -959,7 +950,7 @@ adore_cli_info: ## Show configuration information for ADORe CLI
 	@echo "Parent Hash: ${PARENT_SHORT_HASH}"
 	@echo "Parent Dirty: ${PARENT_IS_DIRTY}"
 	@echo "Parent is ADORe CLI: ${PARENT_IS_ADORE_CLI}"
-	@echo "Requirements Hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "Requirements Hash: ${REQUIREMENTS_HASH_SHORT}"
 	@echo "Packages Hash: ${PACKAGES_SHORT_HASH}"
 	@echo "=== Built Tags Status ==="
 	@if [ -f "${BUILT_TAGS_FILE}" ]; then \
@@ -1012,7 +1003,7 @@ show_changes: ## Show detailed information about detected changes
 	echo ""; \
 	if [ "$$REQUIREMENTS_CHANGED" = "true" ]; then \
 		echo "=== Requirements Changes ==="; \
-		echo "Current hash: ${REQUIREMENTS_SHORT_HASH}"; \
+		echo "Current hash: ${REQUIREMENTS_HASH_SHORT}"; \
 		if [ -f "${LAST_REQUIREMENTS_MANIFEST}" ] && [ -f "${REQUIREMENTS_MANIFEST}" ]; then \
 			echo "Detailed diff:"; \
 			diff -u "${LAST_REQUIREMENTS_MANIFEST}" "${REQUIREMENTS_MANIFEST}" || true; \
@@ -1169,7 +1160,7 @@ help_cli: ## Show ADORe CLI help
 	@echo "  Target architecture: ${ARCH}"
 	@echo "  ADORe CLI branch: ${ADORE_CLI_BRANCH} (${ADORE_CLI_SHORT_HASH})"
 	@echo "  Parent project: ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
-	@echo "  Requirements hash: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "  Requirements hash: ${REQUIREMENTS_HASH_SHORT}"
 	@echo "  Packages hash: ${PACKAGES_SHORT_HASH}"
 	@echo "  User: ${USER} (UID: ${USER_UID}, GID: ${USER_GID})"
 	@echo ""
@@ -1242,7 +1233,7 @@ debug_hashes: ## Debug hash calculation
 	@echo ""
 	@echo "Requirements hash calculation:"
 	@echo "  Raw content hash: $(shell find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | xargs -r cat 2>/dev/null | sha256sum | cut -c1-7)"
-	@echo "  REQUIREMENTS_SHORT_HASH: ${REQUIREMENTS_SHORT_HASH}"
+	@echo "  REQUIREMENTS_HASH_SHORT: ${REQUIREMENTS_HASH_SHORT}"
 	@echo ""
 	@echo "Package files found:"
 	@find "${VENDOR_PATH}" -name "*.deb" 2>/dev/null || echo "  None found"

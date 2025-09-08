@@ -12,10 +12,20 @@
 # SPDX-License-Identifier: EPL-2.0
 # ********************************************************************************
 
-
 GREEN="\033[0;32m"
-NC="\033[0m" # No Color
-CHECKMARK="${GREEN}✔${NC}"
+NC="\033[0m"
+CHECKMARK="${GREEN}✓${NC}"
+
+SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+get_short_requirements_hash() {
+    local full_hash="$1"
+    if [ -n "${full_hash}" ]; then
+        echo "${full_hash}" | cut -c1-7
+    else
+        echo ""
+    fi
+}
 
 check_requirements_changes() {
     if [[ -n "$TERM" && "$TERM" != "dumb" && "$TERM" != "unknown" ]]; then
@@ -32,25 +42,18 @@ check_requirements_changes() {
         RESET=''
     fi
     
+    # Calculate current requirements hash using consistent method
+    current_requirements_full_hash=""
     current_requirements_hash=""
     if [ -n "${SOURCE_DIRECTORY}" ] && [ -d "${SOURCE_DIRECTORY}" ]; then
-        # Find all requirements files and calculate hash - EXACT same logic as Makefile
-        current_requirements_hash=$(find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) \
-            ! -path "*/ros_translator/*" \
-            ! -path "*/.log/*" \
-            ! -path "*/.git/*" \
-            ! -path "*/build/*" \
-            2>/dev/null | \
-            xargs -r cat 2>/dev/null | \
-            sha256sum | cut -c1-7)
+        current_requirements_full_hash=$(bash ${SCRIPT_DIRECTORY}/requirements_hashing_util.sh hash "${SOURCE_DIRECTORY}")
+        current_requirements_hash=$(get_short_requirements_hash "${current_requirements_full_hash}")
     fi
    
-    # Get container requirements hash from CORE image tag (not user image tag)
+    # Get container requirements hash from CORE image tag
     container_requirements_hash=""
     
-    # Look for RH hash in the CORE image tag (requirements hash is in core layer)
     if [ -n "${ADORE_CLI_CORE_IMAGE}" ]; then
-        # Extract requirements hash from core tag like: adore_cli_core:x86_64_main_abc1234_parent_def5678_RH9876543
         container_requirements_hash=$(echo "${ADORE_CLI_CORE_IMAGE}" | grep -o 'RH[a-f0-9]\{7\}' | cut -c3-)
     fi
     
@@ -58,17 +61,15 @@ check_requirements_changes() {
     if [ -z "$container_requirements_hash" ] && [ -n "${SOURCE_DIRECTORY}" ]; then
         built_tags_file="${SOURCE_DIRECTORY}/.log/.adore_cli/built_tags"
         if [ -f "$built_tags_file" ]; then
-            # Try to extract from CORE tag which should contain requirements hash
             core_tag=$(grep "^CORE=" "$built_tags_file" 2>/dev/null | cut -d'=' -f2)
             if [ -n "$core_tag" ]; then
                 container_requirements_hash=$(echo "$core_tag" | grep -o 'RH[a-f0-9]\{7\}' | cut -c3-)
             fi
         fi
     fi
-   
+   c
     printf "    === Requirements(APT, PPA, PIP) ===\n"
 
-    # Compare hashes and show status
     if [ -z "$current_requirements_hash" ]; then
         printf "    ${ORANGE}INFO:${RESET} No requirements files found in project\n"
         return 0
@@ -95,7 +96,6 @@ check_requirements_changes() {
         printf "    3. Then restart: ${GREEN}make cli${RESET}\n"
         printf "\n"
         printf "    ${BOLD}What changed:${RESET}\n"
-        # Show which requirements files have uncommitted changes
         changed_files=$(git diff --name-only -- '**requirements*.system' '**requirements*.pip3' '**requirements*.ppa' 2>/dev/null)
         if [ -n "$changed_files" ]; then
             printf "    Uncommitted changes in:\n"

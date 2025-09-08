@@ -40,13 +40,8 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
 
 # === REQUIREMENTS GATHERING AND INSTALLATION ===
 # Copy the gather script and requirements files from build context
-COPY gather_requirements_files.sh /tmp/gather_requirements_files.sh
-COPY .log/.adore_cli/requirements /tmp/requirements
+COPY .tmp/requirements /tmp/requirements
 WORKDIR /tmp/requirements
-
-# Make the gather script executable and create temporary directory for tracking
-RUN chmod +x /tmp/gather_requirements_files.sh && \
-    mkdir -p /tmp/.tmp/requirements
 
 # Validate that requirements were properly gathered
 RUN echo "=== Validating requirements in build context ===" && \
@@ -100,7 +95,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
             apt-get install --no-install-recommends -y \
                 -o Acquire::Check-Valid-Until=false \
                 $PACKAGES && \
-            echo "Successfully installed system packages"; \
+            echo "Successfully installed system packages"&& cp combined_requirements.system apt_install.success; \
         else \
             echo "No packages to install"; \
         fi; \
@@ -109,48 +104,20 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     fi
 
 # === PYTHON PACKAGES ===
-# Install Python packages discovered from requirements files
 RUN --mount=type=cache,target=/root/.cache/pip \
     echo "=== Installing Python packages ===" && \
     if [ -f "combined_requirements.pip3" ] && [ -s "combined_requirements.pip3" ]; then \
-        echo "Installing packages from combined_requirements.pip3..." && \
         cat combined_requirements.pip3 && \
         PACKAGES=$(cat combined_requirements.pip3 | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//') && \
-        echo "Processed packages: $PACKAGES" && \
         if [ ! -z "$PACKAGES" ]; then \
-            (timeout 600 python3 -m pip install --ignore-installed --break-system-packages $PACKAGES && \
-            echo "Successfully installed Python packages") || \
-            (echo "Warning: Some Python packages may not have been installed due to network issues" && true); \
-        else \
-            echo "No Python packages to install"; \
+            timeout 600 python3 -m pip install --ignore-installed --break-system-packages $PACKAGES && \
+            cp combined_requirements.pip3 pip_install.success; \
         fi; \
-    else \
-        echo "No Python packages to install"; \
     fi
-
-# === VERIFY INSTALLATIONS ===
-# Verify that key packages are actually installed and available
-RUN echo "=== Verifying package installations ===" && \
-    if [ -f "combined_requirements.system" ]; then \
-        echo "Checking for proj package (commonly requested)..." && \
-        (pkg-config --exists proj && echo "✓ proj package found via pkg-config") || \
-        (dpkg -l | grep -i proj && echo "✓ proj-related packages found") || \
-        echo "⚠ proj package may not be properly installed" && \
-        echo "Available proj-related packages:" && \
-        apt-cache search proj | head -5; \
-    fi
-
-# === GENERATE REQUIREMENTS MANIFEST ===
-# Create a manifest of what was installed for tracking changes
-RUN echo "=== Generating requirements manifest ===" && \
-    find . -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) 2>/dev/null | \
-    xargs -r sha256sum 2>/dev/null | sort > /tmp/.tmp/requirements/requirements_manifest.sha256 && \
-    echo "Requirements manifest created:" && \
-    cat /tmp/.tmp/requirements/requirements_manifest.sha256
 
 # === SUCCESS MARKER ===
 # Create a marker file to indicate successful build for later copying
-RUN echo "Build completed successfully" > /tmp/.tmp/requirements/build_success.marker && \
+RUN echo "Build completed successfully" > /tmp/requirements/build.success && \
     echo "Core layer build complete - all requirements processed"
 
 WORKDIR /tmp/adore

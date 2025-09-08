@@ -157,7 +157,7 @@ gather_packages:
 	@echo "=== Generating package manifest for build context ==="
 	@if [ -d "${BUILD_CONTEXT_PACKAGES_DIR}" ]; then \
 		echo "# Package manifest for ADORe CLI user layer" > "${PACKAGES_MANIFEST_TXT}"; \
-		echo "# Generated: $$(date)" >> "${PACKAGES_MANIFEST_TXT}"; \
+#		echo "# Generated: $$(date)" >> "${PACKAGES_MANIFEST_TXT}"; \
 		PACKAGE_COUNT=$$(find "${BUILD_CONTEXT_PACKAGES_DIR}" -name "*.deb" 2>/dev/null | wc -l); \
 		echo "# Total packages: $$PACKAGE_COUNT" >> "${PACKAGES_MANIFEST_TXT}"; \
 		if [ "$$PACKAGE_COUNT" -gt 0 ]; then \

@@ -45,6 +45,7 @@ build: clean gather_requirements
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
 		docker buildx build \
 			--builder=default \
+			-f Dockerfile.adore_cli_core \
 			--platform $(DOCKER_PLATFORM) \
 			--tag ${ADORE_CLI_CORE_IMAGE} \
 			--build-arg ADORE_CLI_BASE_IMAGE=${ADORE_CLI_BASE_IMAGE} \
@@ -55,7 +56,9 @@ build: clean gather_requirements
 			--build-arg ARCH=${ARCH} \
 			--load . ; \
 	else \
-		docker build --network host \
+		docker build \
+			-f Dockerfile.adore_cli_core \
+			--network host \
 			--tag ${ADORE_CLI_CORE_IMAGE} \
 			--build-arg ADORE_CLI_BASE_IMAGE=${ADORE_CLI_BASE_IMAGE} \
 			--build-arg ROS_DISTRO=${ROS_DISTRO} \
@@ -64,100 +67,22 @@ build: clean gather_requirements
 			--build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
 			--build-arg ARCH=${ARCH} . ; \
 	fi
-	@echo "=== Copying requirements manifest from successful build ==="
-	@make copy_requirements_from_container
 
-# Target: gather_requirements
 .PHONY: gather_requirements
 gather_requirements:
 	@echo "=== Gathering requirements for core layer ==="
 	@echo "SOURCE_DIRECTORY: '${SOURCE_DIRECTORY}'"
-	@echo "VENDOR_PATH: '${VENDOR_PATH}'"
-	@echo "PWD: $(shell pwd)"
-	@echo "Build context requirements: ${BUILD_CONTEXT_REQUIREMENTS_DIR}"
-	
-	@# Clean up any existing temp directories
-	@rm -rf "${BUILD_TEMP_DIR}" 2>/dev/null || true
-	@rm -rf "${BUILD_CONTEXT_REQUIREMENTS_DIR}" 2>/dev/null || true
-	
-	@# Create directories
-	@mkdir -p "${BUILD_CONTEXT_REQUIREMENTS_DIR}"
-	@mkdir -p "${BUILD_TEMP_DIR}"
-	
-	@# Export SOURCE_DIRECTORY for the script and run gathering
-	@SOURCE_DIRECTORY='${SOURCE_DIRECTORY}' bash gather_requirements_files.sh
-	
-	@# Copy gathered requirements to build context
-	@if [ -d "${SOURCE_DIRECTORY}/.log/.adore_cli/requirements" ]; then \
-		echo "Copying requirements to build context..."; \
-		cp -r "${SOURCE_DIRECTORY}/.log/.adore_cli/requirements/"* "${BUILD_CONTEXT_REQUIREMENTS_DIR}/" 2>/dev/null || true; \
-	fi
-	
-	@# Always ensure build context has required structure
-	@touch "${BUILD_CONTEXT_REQUIREMENTS_DIR}/.gitkeep"
-	
-	@echo "Build context contents:"; \
-	ls -la "${BUILD_CONTEXT_REQUIREMENTS_DIR}" 2>/dev/null || echo "Empty build context"
-	
+	rm -rf .tmp
+	mkdir -p .tmp
+	cd ../tools/ && bash requirements_hashing_util.sh combine "${SOURCE_DIRECTORY}"
+	cd ../tools/ && bash requirements_hashing_util.sh manifest "${SOURCE_DIRECTORY}"
+	cp "${SOURCE_DIRECTORY}/.log/.adore_cli/requirements" .tmp/ -r
 	@echo "=== Requirements gathering complete ==="
 
-# Target: copy_requirements_from_container
-.PHONY: copy_requirements_from_container
-copy_requirements_from_container:
-	@echo "=== Copying requirements from successful build ==="
-	@if docker image inspect ${ADORE_CLI_CORE_IMAGE} >/dev/null 2>&1; then \
-		echo "Extracting .tmp directory from built image: ${ADORE_CLI_CORE_IMAGE}"; \
-		CONTAINER_ID=$$(docker create ${ADORE_CLI_CORE_IMAGE}); \
-		if docker cp "$$CONTAINER_ID:/tmp/.tmp" "${BUILD_TEMP_DIR}/" 2>/dev/null; then \
-			echo "Successfully extracted .tmp directory"; \
-			if [ -f "${BUILD_TEMP_DIR}/.tmp/requirements/build_success.marker" ]; then \
-				echo "Build success marker found, copying requirements"; \
-				mkdir -p "${SOURCE_DIRECTORY}/.log/.adore_cli"; \
-				if [ -d "${BUILD_TEMP_DIR}/.tmp/requirements" ]; then \
-					cp -r "${BUILD_TEMP_DIR}/.tmp/requirements" "${SOURCE_DIRECTORY}/.log/.adore_cli/"; \
-					echo "Requirements copied to: ${SOURCE_DIRECTORY}/.log/.adore_cli/requirements"; \
-					if [ -f "${SOURCE_DIRECTORY}/.log/.adore_cli/requirements/requirements_manifest.sha256" ]; then \
-						cp "${SOURCE_DIRECTORY}/.log/.adore_cli/requirements/requirements_manifest.sha256" "${REQUIREMENTS_MANIFEST}"; \
-						echo "Requirements manifest saved to: ${REQUIREMENTS_MANIFEST}"; \
-					fi; \
-				fi; \
-			else \
-				echo "Warning: No build success marker found"; \
-			fi; \
-		else \
-			echo "Warning: Could not extract .tmp directory from container"; \
-		fi; \
-		docker rm "$$CONTAINER_ID" >/dev/null 2>&1 || true; \
-	else \
-		echo "Error: Core image ${ADORE_CLI_CORE_IMAGE} not found"; \
-	fi
-
-# Target: clean
 .PHONY: clean
 clean:
 	@echo "Cleaning core build artifacts..."
+	@rm -rf .log
+	@rm -rf .tmp
 	@rm -rf "${BUILD_TEMP_DIR}" 2>/dev/null || true
 	@rm -rf "${BUILD_CONTEXT_REQUIREMENTS_DIR}" 2>/dev/null || true
-
-# Target: debug_requirements
-.PHONY: debug_requirements
-debug_requirements:
-	@echo "=== Requirements Debug Info ==="
-	@echo "SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
-	@echo "VENDOR_PATH: ${VENDOR_PATH}"
-	@echo "BUILD_CONTEXT_REQUIREMENTS_DIR: ${BUILD_CONTEXT_REQUIREMENTS_DIR}"
-	@echo "REQUIREMENTS_MANIFEST: ${REQUIREMENTS_MANIFEST}"
-	@echo ""
-	@echo "Source directory exists: $(shell [ -d '${SOURCE_DIRECTORY}' ] && echo 'yes' || echo 'no')"
-	@echo "Vendor directory exists: $(shell [ -d '${VENDOR_PATH}' ] && echo 'yes' || echo 'no')"
-	@echo "Requirements manifest exists: $(shell [ -f '${REQUIREMENTS_MANIFEST}' ] && echo 'yes' || echo 'no')"
-	@echo ""
-	@if [ -f "${REQUIREMENTS_MANIFEST}" ]; then \
-		echo "Current requirements manifest:"; \
-		cat "${REQUIREMENTS_MANIFEST}"; \
-	else \
-		echo "No requirements manifest found"; \
-	fi
-	@echo ""
-	@echo "Requirements files found in source tree:"
-	@find "${SOURCE_DIRECTORY}" -type f \( -name "*.system" -o -name "*.pip3" -o -name "*.ppa" \) ! -path "*/ros_translator/*" ! -path "*/.log/*" ! -path "*/.git/*" ! -path "*/build/*" 2>/dev/null | head -20 || echo "None found"

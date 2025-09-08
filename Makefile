@@ -65,6 +65,8 @@ clean:
 	@rm -rf ros2_workspace/log
 	@rm -rf "${ADORE_CLI_LOG_DIRECTORY}"
 	@rm -rf "${ADORE_CLI_MAKEFILE_PATH}/.log/.adore_cli"
+	cd adore_cli_core && make clean
+	cd adore_cli && make clean
 
 	@echo "Removing ADORe CLI images..."
 	@docker rmi $$(docker images -q ${ADORE_CLI_BASE_IMAGE}) --force 2> /dev/null || true
