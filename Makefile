@@ -51,8 +51,14 @@ save: save_docker_images ## Save all ADORe Docker images to disk in .docker_cach
 
 # === CLEANUP TARGETS ===
 
+
+.PHONY: clean_all
+clean_all: ## Clean ALL adore cli images regardless of tag
+	@echo "Cleaning all ADORe CLI Docker images..."
+	@docker images "adore_cli*" -q | xargs -r docker rmi -f
+
 .PHONY: clean
-clean:
+clean: clean_all
 	@echo "Cleaning build artifacts and Docker images..."
 	make stop || true
 	@rm -rf build
@@ -76,6 +82,7 @@ clean:
 	@docker rmi $$(docker images --filter "dangling=true" -q) --force > /dev/null 2>&1 || true
 	@echo "Cleaning tag history..."
 	@rm -f "${SOURCE_DIRECTORY}/.log/.adore_cli/adore_cli_tag_history"
+
 
 # === TEST TARGETS ===
 
