@@ -80,8 +80,6 @@ clean: clean_all
 	@docker rmi $$(docker images -q ${ADORE_CLI_IMAGE}) --force 2> /dev/null || true
 	@echo "Removing dangling images..."
 	@docker rmi $$(docker images --filter "dangling=true" -q) --force > /dev/null 2>&1 || true
-	@echo "Cleaning tag history..."
-	@rm -f "${SOURCE_DIRECTORY}/.log/.adore_cli/adore_cli_tag_history"
 
 
 # === TEST TARGETS ===

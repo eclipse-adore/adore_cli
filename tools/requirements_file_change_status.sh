@@ -67,7 +67,7 @@ check_requirements_changes() {
             fi
         fi
     fi
- 
+
     printf "    === Requirements(APT, PPA, PIP) ===\n"
 
     if [ -z "$current_requirements_hash" ]; then
