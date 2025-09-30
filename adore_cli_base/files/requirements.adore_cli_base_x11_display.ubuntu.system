@@ -3,3 +3,6 @@
 # in the docker image produced by 'Dockerfile.adore_cli_core_x11_display'
 x11-apps
 xterm
+x11-utils
+x11-xserver-utils
+xvfb

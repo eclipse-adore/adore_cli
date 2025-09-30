@@ -1,11 +1,58 @@
+# ADORe CLI Main Docker Compose Configuration
+# 
+# This is the primary compose file used by the Make targets.
+# It extends service definitions from adore_cli.yaml and applies
+# runtime configurations for different deployment scenarios.
+#
+# Usage:
+#   - `make cli` uses the adore_cli service
+#   - `make build` builds the complete three-layer stack  
+#   - `make clean` cleans all layer images
+#
+# Three-Layer Architecture:
+#   The system uses a three-layer approach for maximum efficiency:
+#   1. Base foundation: OS + ROS2 (user-agnostic, highly cacheable)
+#   2. Core environment: Complete tools + all dependencies (user-agnostic, shareable)
+#   3. User layer: User customization + .deb packages (user-specific, thin)
+
+# === SERVICE CONFIGURATION ===
+
 services:
-  adore_cli_core:
-    extends:
-      file: adore_cli.yaml
-      service: adore_cli_core
-    profiles:
-      - donotstart
+  # === MAIN DEVELOPMENT SERVICE ===  
+  # Complete three-layer development environment - primary service for interactive use
+  # Started automatically by `make cli` and related targets
   adore_cli:
     extends:
       file: adore_cli.yaml
       service: adore_cli
+    # No profile restriction - this service can be started directly
+
+# === USAGE PATTERNS ===
+#
+# MAKE TARGET INTEGRATION:
+# - `make cli` → starts/attaches to adore_cli service
+# - `make start` → starts adore_cli service in background  
+# - `make stop` → stops all services
+# - `make build` → builds all three layers intelligently
+#
+# BUILD PROCESS:
+# 1. Base foundation layer: adore_cli_base:${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+# 2. Core environment layer: adore_cli_core:${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}  
+# 3. User layer: adore_cli:${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+#
+# DIRECT DOCKER COMPOSE USAGE:
+# - `docker compose up adore_cli` → starts development environment
+# - `docker compose build` → builds user layer service (triggers layer builds)
+# - `docker compose down` → stops and removes containers
+#
+# DEVELOPMENT WORKFLOW:
+# 1. Use `make cli` for normal development (recommended)
+# 2. Use `make build` when Dockerfiles or requirements change
+# 3. Use `make clean` to reset environment completely
+# 4. Use `make build_status` to check layer status
+#
+# CACHING STRATEGY:
+# - Base and core layers are shared across users
+# - Only user layer rebuilds for user changes
+# - Git commit changes rebuild layers as needed
+# - Architecture changes rebuild all layers

@@ -1,0 +1,93 @@
+ARG ADORE_CLI_CORE_IMAGE=adore_cli_core:latest
+FROM ${ADORE_CLI_CORE_IMAGE} AS adore_cli
+
+# Build arguments
+ARG ROS_DISTRO=jazzy
+ARG OS_CODE_NAME=noble
+ARG BRANCH=main
+ARG SHORT_HASH=latest
+ARG PARENT_BRANCH=main
+ARG PARENT_SHORT_HASH=latest
+ARG ARCH=x86_64
+ARG USER=user
+ARG UID=1000
+ARG GID=1000
+ARG HOSTNAME=ADORe-CLI
+
+# Copy packages and manifest for installation
+COPY packages/. /tmp/packages/
+COPY packages_manifest.txt /tmp/packages_manifest.txt
+WORKDIR /tmp
+
+# Create temp directory for package tracking
+RUN mkdir -p /tmp/.tmp/packages
+
+# Install .deb packages (this step will be rebuilt when packages change due to manifest)
+RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
+    echo "=== Installing .deb packages ===" && \
+    cd /tmp/packages && \
+    echo "Package manifest contents:" && \
+    cat /tmp/packages_manifest.txt && \
+    echo "Available .deb files:" && \
+    find . -maxdepth 1 -type f -name "*.deb" -exec basename {} \; | sort && \
+    DEB_COUNT=$(find . -maxdepth 1 -type f -name "*.deb" | wc -l) && \
+    echo "Found $DEB_COUNT .deb packages to install" && \
+    if [ "$DEB_COUNT" -gt 0 ]; then \
+        echo "Installing packages..." && \
+        find . -maxdepth 1 -type f -name "*.deb" -print0 | \
+        xargs -0 -r dpkg -i --force-all 2>/dev/null || true && \
+        echo "Fixing any broken dependencies..." && \
+        rm -f /etc/apt/apt.conf.d/docker-clean && \
+        (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
+        (timeout 300 apt-get install -f -y --no-install-recommends \
+            -o Acquire::Check-Valid-Until=false 2>/dev/null || \
+         echo "Warning: Could not fix all dependencies due to network issues") && \
+        echo "Package installation completed" && \
+        cp /tmp/packages_manifest.txt /tmp/.tmp/packages/ && \
+        echo "success" > /tmp/.tmp/packages/build_success.marker; \
+    else \
+        echo "No .deb packages found to install" && \
+        echo "no_packages" > /tmp/.tmp/packages/build_success.marker; \
+    fi
+
+# Remove default ubuntu user if it exists
+RUN userdel --remove ubuntu 2>/dev/null || true && \
+    rm -rf /home/ubuntu 2>/dev/null || true
+
+# Create user with specified UID/GID
+RUN groupadd --gid ${GID} ${USER} 2>/dev/null || true && \
+    useradd --create-home --uid ${UID} --gid ${GID} --shell /bin/zsh ${USER}
+
+# Set up user environment
+RUN cp /etc/skel/.zshrc /home/${USER}/ && \
+    chown -R ${UID}:${GID} /home/${USER}
+
+# Add user to tracing group
+RUN usermod -aG tracing ${USER}
+
+# Configure sudo access
+## rsyslog config
+RUN echo "${USER} ALL = NOPASSWD : /usr/sbin/rsyslogd, /usr/bin/apt-get, /usr/bin/apt, /usr/bin/python3, /usr/bin/apt-file, /usr/bin/apt-cache, /usr/bin/aptitude" >> /etc/sudoers && \
+    mkdir -p /var/log/ros2/rsyslog /var/lib/rsyslog /var/log/syslog && \
+    chmod -R 755 /var/log/ros2 /var/lib/rsyslog && \
+    (getent group syslog || groupadd -r syslog) && \
+    usermod -aG syslog ${USER} && \
+    chown -R syslog:syslog /var/log/syslog && \
+    chown -R syslog:syslog /var/lib/rsyslog && \
+    chmod -R 775 /var/log/ros2 && \
+    chgrp -R syslog /var/log/ros2 && \
+    chown -R ${UID}:${GID} /var/log/ros2 /var/spool/rsyslog
+
+COPY files/rsyslog.conf.template /etc/rsyslog.conf.template 
+
+# Set working directory
+WORKDIR /tmp/adore
+
+# Set user for subsequent operations
+COPY files/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+USER ${USER}
+WORKDIR /tmp/adore
+ENTRYPOINT ["/entrypoint.sh"]

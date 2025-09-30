@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ADORE CLI Docker Core System Requirements
+# =============================================================================
+# 
+# APT package requirements for the adore-cli Docker development environment.
+# These packages are installed during the Docker image build process via
+# 'Dockerfile.adore_cli_core'.
+#
+# Format: One package per line, grouped by functional category
+# Variables: ${ROS_DISTRO} is resolved during Docker build with envsubst
+#
+# Installation:
+#   export ROS_DISTRO=jazzy
+#   envsubst < requirements.system | grep -v '^#' | grep -v '^$' | xargs sudo apt-get install -y
+#
+# Variable Substitution:
+#   envsubst (from gettext package) replaces ${VARIABLE_NAME} patterns with
+#   environment variable values. Requires ROS_DISTRO to be set before use.
+# =============================================================================
+
+# System utilities and shell environment
+rsyslog
+sudo
+apt-file
+vim
+file
+zsh
+git
+curl
+wget
+less
+gettext
+
+# Development and build tools
+ccache
+cmake
+ros-dev-tools
+
+# Python development environment
+python3-venv
+python3-pip
+python3-colcon-common-extensions
+
+# ROS core components
+ros-${ROS_DISTRO}-rclcpp
+
+# ROS tracing and debugging tools
+ros-${ROS_DISTRO}-tracetools
+ros-${ROS_DISTRO}-tracetools-acceleration
+ros-${ROS_DISTRO}-tracetools-acceleration-dbgsym
+ros-${ROS_DISTRO}-tracetools-analysis
+ros-${ROS_DISTRO}-tracetools-dbgsym
+ros-${ROS_DISTRO}-tracetools-image-pipeline
+ros-${ROS_DISTRO}-tracetools-image-pipeline-dbgsym
+ros-${ROS_DISTRO}-tracetools-launch
+ros-${ROS_DISTRO}-tracetools-read
+ros-${ROS_DISTRO}-tracetools-test
+ros-${ROS_DISTRO}-tracetools-trace
+
+# Platform-specific dependencies
+libhdf5-dev
+software-properties-common
+
+# Disabled packages
+#python3-rospy

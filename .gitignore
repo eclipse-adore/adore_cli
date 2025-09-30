@@ -3,9 +3,10 @@
 .bash_history
 catkin_workspace/
 .config
-adore_cli
 .ccache
-adore_cli_core
 **/.tmp
 .tmp
 build
+ros2_workspace
+adore_cli/packages
+adore_cli/packages_manifest.txt

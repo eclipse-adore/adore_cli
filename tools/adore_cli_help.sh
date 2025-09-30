@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+# ********************************************************************************
+# Copyright (c) 2025 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Eclipse Public License 2.0 which is available at
+# https://www.eclipse.org/legal/epl-2.0
+#
+# SPDX-License-Identifier: EPL-2.0
+# ********************************************************************************
+
 
 
 echoerr (){ printf "%s" "$@" >&2;}
@@ -11,7 +24,7 @@ printf "  At any time you can run 'make help' to get a list of available make ta
 printf "\n"
 printf "  Environment: \n"
 printf "    %-50s %s\n" "OS:" "$(grep '^VERSION=' /etc/os-release | tr -d '"' | cut -d "=" -f2)"
-printf "    %-50s %s\n" "ADORE_SOURCE_DIRECTORY:" "${ADORE_SOURCE_DIRECTORY}"
+printf "    %-50s %s\n" "ADORE_SOURCE_DIRECTORY:" "${SOURCE_DIRECTORY}"
 printf "    %-50s %s\n" "ROS_VERSION:" "${ROS_VERSION}"
 printf "    %-50s %s\n" "ROS_DISTRO:" "${ROS_DISTRO}"
 printf "    %-50s %s\n" "ROS_HOME:" "${ROS_HOME}"
@@ -41,5 +54,5 @@ printf "    To attach another termanal session run: \n"
 printf "      'make cli' \n"
 printf "    To exit the ADORe CLI type 'exit' \n"
 printf "    To terminate the ADORe CLI type 'make stop' \n"
-printf "    All Make commands must be run from the ADORe source directory: %s\n" "${ADORE_SOURCE_DIRECTORY}"
+printf "    All Make commands must be run from the ADORe source directory: %s\n" "${SOURCE_DIRECTORY}"
 printf "%b" "    \e[1;31mWARNING: All file system changes made OUTSIDE of the ADORe source directory will NOT persist!\e[0m\n\n"

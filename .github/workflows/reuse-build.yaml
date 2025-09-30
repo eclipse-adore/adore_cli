@@ -1,0 +1,136 @@
+name: ADORe CLI Reusable Build Workflow
+
+on:
+  workflow_call:
+    inputs:
+      platform:
+        description: 'GitHub Actions runner platform'
+        required: true
+        type: string
+      archive_name:
+        description: 'Name for uploaded logs archive'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build ADORe CLI
+    runs-on: ${{ inputs.platform }}
+
+    steps:
+      - name: Init
+        shell: bash
+        run: |
+          df -h
+          sudo apt-get update
+
+#      - name: Maximize free space
+#        id: maximize-space
+#        uses: jlumbroso/free-disk-space@main
+#        with:
+#          tool-cache: true
+#          android: true
+#          dotnet: true
+#          haskell: true
+#          large-packages: true
+#          docker-images: true
+#          swap-storage: true
+
+#      - name: Freespace Check
+#        shell: bash
+#        run: |
+#          df -h
+#          REQUIRED_FREE_SPACE=25
+#          free_space=$(df -h . | awk '{print $4}' | grep "G")
+#          free_space="${free_space%G}"
+#          if [ -z "$free_space" ]; then
+#              echo "ERROR: free_space variable is empty or not set." >&2
+#              exit 1
+#          fi
+#          df -h
+#          echo "Free space (required): ${REQUIRED_FREE_SPACE} GB"
+#          echo "Free space (available): ${free_space} GB"
+#          if (( REQUIRED_FREE_SPACE > free_space )); then
+#              echo "ERROR: Insufficient free space: ${free_space} GB available, ${REQUIRED_FREE_SPACE} GB required." >&2
+#              exit 1
+#          fi
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+
+      - name: Install requirements
+        shell: bash
+        run: |
+          df -h
+          sudo apt-get update
+          sudo apt-get install -y make curl jq
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        shell: bash
+        run: |
+          df -h
+          make build
+
+      - name: Test
+        shell: bash
+        run: |
+          df -h
+          make save
+          make test
+
+      - name: Registry Status Summary
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          echo "=== Registry Status ==="
+          make registry_status || true
+
+      - name: Upload Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.archive_name }}
+          path: .log
+        if: always()
+
+      - name: Push Base Images to Registry
+        if: github.event_name != 'pull_request' && github.repository == 'eclipse-adore/adore_cli'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          echo "Publishing base and core images to registry..."
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Registry: ${{ env.REGISTRY }}"
+          echo "Branch: ${{ github.ref_name }}"
+          
+          make registry_status || true
+          make push_base_image
+          make push_core_image
+          
+          echo "Images published successfully"
+
+      - name: Registry Status Summary
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          echo "=== Final Registry Status ==="
+          make registry_status || true
+

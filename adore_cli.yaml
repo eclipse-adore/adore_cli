@@ -1,82 +1,88 @@
-services: 
-  adore_cli_core:
-    privileged: true
-    platform: ${DOCKER_PLATFORM:-linux/amd64}
-    image: ${ADORE_CLI_CORE_IMAGE}
-    container_name: ${ADORE_CLI_CONTAINER_NAME}
-    user: ${USER}
-    hostname: ${HOSTNAME:-ADORe-CLI}
-    network_mode: "host"
-    ipc: "host"
-    pid: "host"
-    environment:
-      - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-      - TEST_SCENARIOS=${TEST_SCENARIOS:-baseline_test.launch}
-      - SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-.}
-      - LOG_DIRECTORY=${SOURCE_DIRECTORY:-/default/source}/.log/
-      - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
-      - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
-      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4 
-    build:
-      context: ${ADORE_CLI_MAKEFILE_PATH}
-      network: host
-      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/docker/Dockerfile.adore_cli_core
-      args:
-        - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-        - USER=${USER}
-        - UID=${UID:-1000}
-        - GID=${GID:-1001}
-        - ROS_DISTRO=${ROS_DISTRO:-jazzy}
-        - OS_CODE_NAME=${OS_CODE_NAME:-noble}
-    volumes:
-      - ./:/tmp/adore
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .zsh_history:/home/${USER}/.zsh_history
-      - .zsh_history:/home/${USER}/.zsh_history.new
-      - ${SOURCE_DIRECTORY}:/tmp/adore
-      - ${SOURCE_DIRECTORY}:${SOURCE_DIRECTORY}
-      - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache
-      - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
+# ADORe CLI Docker Compose Services Configuration
+# 
+# This file defines the core ADORe CLI development environment service:
+# - adore_cli: Complete three-layer development environment with tools and GUI support
+#
+# The three-layer architecture provides:
+# - Base foundation: OS + ROS2 foundation (user-agnostic, highly cacheable)
+# - Core environment: Complete ROS2 tools + all dependencies (user-agnostic, shareable)  
+# - User layer: User-specific customization + .deb packages (user-specific, thin layer)
 
+# === SHARED CONFIGURATION ANCHORS ===
+# These YAML anchors reduce duplication and ensure consistency
+
+x-common-config: &common-config
+  privileged: false
+  platform: ${DOCKER_PLATFORM:-linux/amd64}
+  user: ${USER}
+  hostname: ${HOSTNAME:-ADORe-CLI}
+  network_mode: "host"
+  ipc: "host"
+  pid: "host"
+
+x-common-environment: &common-environment
+  HOSTNAME: ${HOSTNAME:-ADORe-CLI}
+  SOURCE_DIRECTORY: ${SOURCE_DIRECTORY:-.}
+  LOG_DIRECTORY: ${SOURCE_DIRECTORY:-/default/source}/.log/.adore_cli/
+  ROS_HOME: ${SOURCE_DIRECTORY}/.log/.ros
+  HISTFILE: ${SOURCE_DIRECTORY}/.zsh_history
+  FASTDDS_BUILTIN_TRANSPORTS: UDPv4
+  USER: ${USER}
+  UID: ${UID}
+  GID: ${GID}
+  DISPLAY: ${DISPLAY:-:0}
+
+
+x-common-build-args: &common-build-args
+  HOSTNAME: ${HOSTNAME:-ADORe-CLI}
+  USER: ${USER}
+  UID: ${UID:-1000}
+  GID: ${GID:-1001}
+  ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+  OS_CODE_NAME: ${OS_CODE_NAME:-noble}
+  BRANCH: ${ADORE_CLI_BRANCH}
+  SHORT_HASH: ${ADORE_CLI_SHORT_HASH}
+  PARENT_BRANCH: ${PARENT_BRANCH}
+  PARENT_SHORT_HASH: ${PARENT_SHORT_HASH}
+  ARCH: ${ARCH}
+
+# === SERVICE DEFINITIONS ===
+
+services:
+  # === MAIN DEVELOPMENT SERVICE ===
+  # Complete three-layer development environment with GUI support and development tools
+  # Used for: Interactive development, graphical applications, full feature set
   adore_cli:
-    privileged: true
-    platform: ${DOCKER_PLATFORM:-linux/amd64}
-    ipc: "host"
-    pid: "host"
+    <<: *common-config
     image: ${ADORE_CLI_IMAGE}
     container_name: ${ADORE_CLI_CONTAINER_NAME}
-    user: ${USER} 
-    hostname: ${HOSTNAME:-ADORe-CLI}
-    network_mode: "host"
+    pull_policy: missing  # Only pull base images if they don't exist locally
+    
+    # === ENVIRONMENT VARIABLES ===
     environment:
-      - ROS_DISTRO=${ROS_DISTRO:-jazzy}
-      - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-      - SOURCE_DIRECTORY=${SOURCE_DIRECTORY:-.}
-      - ADORE_SOURCE_DIRECTORY=${SOURCE_DIRECTORY}
-      - ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY}
-      - DISPLAY_MODE=${DISPLAY_MODE:-native}
-      # - DISPLAY_MODE=${DISPLAY_MODE:-window_manager}
-      # - DISPLAY_MODE=${DISPLAY_MODE:-headless}
-      - DISPLAY=${DISPLAY}
-      - USER=${USER}
-      - UID=${UID}
-      - GID=${GID}
-      - TEST_SCENARIOS=${TEST_SCENARIOS:-baseline_test.launch}
-      - LOG_DIRECTORY=${SOURCE_DIRECTORY:-/default/source}/.log/
-      - "ROS_HOME=${SOURCE_DIRECTORY}/.log/.ros"
-      - "HISTFILE=${SOURCE_DIRECTORY}/.zsh_history"
-      - ADORE_CLI_IMAGE=${ADORE_CLI_IMAGE}
-      - ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME}
-      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4 
+      <<: *common-environment
+      ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+      SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}
+      ADORE_CLI_WORKING_DIRECTORY: ${ADORE_CLI_WORKING_DIRECTORY}
+      TEST_SCENARIOS: ${TEST_SCENARIOS:-baseline_test.launch}
+      ADORE_CLI_IMAGE: ${ADORE_CLI_IMAGE}
+      UID: ${USER_UID:-${UID}}
+      GID: ${USER_GID:-${GID}}
+      ADORE_CLI_CORE_IMAGE: ${ADORE_CLI_CORE_IMAGE}
+      ADORE_CLI_CONTAINER_NAME: ${ADORE_CLI_CONTAINER_NAME}
+      DISPLAY: ${DISPLAY:-:0}
+    
+    # === BUILD CONFIGURATION ===
+    # This builds the complete three-layer stack when needed
     build:
       context: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli
       network: host
-      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile
+      dockerfile: ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile.adore_cli
       args:
-        - HOSTNAME=${HOSTNAME:-ADORe-CLI}
-        - USER=${USER}
-        - UID=${UID:-1000}
-        - GID=${GID:-1001}
+        <<: *common-build-args
+        ADORE_CLI_CORE_IMAGE: ${ADORE_CLI_CORE_IMAGE}
+    
+    # === VOLUME MOUNTS ===
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /var/run/docker.sock:/var/run/docker.sock
@@ -85,6 +91,56 @@ services:
       - ${SOURCE_DIRECTORY}:/tmp/adore
       - ${SOURCE_DIRECTORY}:${SOURCE_DIRECTORY}
       - ${ADORE_CLI_MAKEFILE_PATH}/.ccache:/home/${USER}/.ccache
+      - ${SOURCE_DIRECTORY}/.log/.adore_cli:/var/log/adore_cli
       - ${SOURCE_DIRECTORY}/.log:/var/log/ros2
+      - ${SOURCE_DIRECTORY}/.log:/home/${USER}/.log
+      - ${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro
+      - ${HOME}/.ssh:/home/${USER}/.ssh:ro
+
+    
+    # === NETWORK CONFIGURATION ===
     extra_hosts:
       - "${HOSTNAME:-ADORe-CLI}:127.0.0.1"
+
+# === CONFIGURATION NOTES ===
+#
+# THREE-LAYER ARCHITECTURE:
+# 1. Base Foundation (adore_cli_base): OS + ROS2 foundation
+#    - Tag: ${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+#    - User-agnostic, highly cacheable
+#    - Shared across all users and environments
+#
+# 2. Core Environment (adore_cli_core): Complete ROS2 environment + all dependencies
+#    - Tag: ${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}
+#    - User-agnostic, includes all discovered requirements
+#    - Shared across all users for same adore_cli commit
+#
+# 3. User Layer (adore_cli): User-specific customization + .deb packages
+#    - Tag: ${ARCH}_${ADORE_CLI_BRANCH}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH}_${PARENT_SHORT_HASH}
+#    - User-specific with .deb packages and user account
+#    - Final development-ready image
+#
+# SECURITY CONSIDERATIONS:
+# - privileged: true - Required for hardware access and container management
+# - Docker socket mount - Enables container management from within container
+# - Host networking - Simplifies ROS2 networking and reduces latency
+#
+# DISPLAY MODES:
+# - native: Direct X11 forwarding to host display (best performance)
+# - window_manager: Isolated display with window manager
+# - headless: No display server (for CI/CD and remote operations)
+#
+# VOLUME STRATEGY:
+# - Source code is mounted at multiple paths for flexibility
+# - Build cache (.ccache) persists between container rebuilds
+# - Shell history persists for better development experience
+# - Logs are accessible from both host and container in .log/.adore_cli/
+#
+# NETWORKING:
+# - Host networking mode simplifies ROS2 multi-machine communication
+# - IPC and PID sharing enables advanced debugging and system integration
+#
+# PULL POLICY:
+# - pull_policy: missing - Only attempts to pull base images if they don't exist locally
+# - This prevents network failures when base images are already cached
+# - Reduces build times and enables offline development when images are pre-pulled
