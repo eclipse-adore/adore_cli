@@ -566,11 +566,9 @@ _build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
 	    echo "✗ User layer build failed"; \
 	    echo ""; \
 	    echo "BUILD FAILURE - TROUBLESHOOTING STEPS:"; \
-	    echo "1. Check .deb packages in vendor/ directory"; \
-	    echo "2. Try building user layer manually:"; \
-	    echo "   cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli && make build"; \
-	    echo "3. Check package dependencies: make debug_packages"; \
-	    echo "4. Clean and retry: make clean && make build"; \
+		echo "1. Clean docker build cache with: 'docker buildx prune  && docker builder prune'"; \
+	    echo "2. Clean and retry: make clean && make build"; \
+		echo "3. Restart the docker engine with: 'sudo systemctl docker restart'"; \
 	    exit 1; \
 	fi && \
 	ACTUAL_BASE_TAG="$$ACTUAL_BASE_TAG" ACTUAL_CORE_TAG="$$ACTUAL_CORE_TAG" ACTUAL_USER_TAG="$$ACTUAL_USER_TAG" make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _save_built_tags
