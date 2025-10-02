@@ -846,7 +846,7 @@ adore_cli_teardown:
 	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} stop 2>/dev/null || true
 	@if command -v xhost >/dev/null 2>&1; then \
 		echo "Removing X11 access for Docker with 'xhost -local:docker'"; \
-		xhost -local:docker; \
+		xhost -local:docker || true; \
 	else \
 		echo "xhost not available - skipping X11 cleanup"; \
 	fi
