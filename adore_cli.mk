@@ -822,6 +822,33 @@ _check_and_build_user:
 
 # === SETUP AND TEARDOWN ===
 
+.PHONY: check_display
+check_display:
+	@if [ -z "$$DISPLAY" ]; then \
+		echo "Warning: DISPLAY variable is not set"; \
+		echo "Set it with: export DISPLAY=:0 (or appropriate value) to enable x11 forwarding."; \
+	else \
+		echo "DISPLAY is set to: $$DISPLAY"; \
+	fi
+
+.PHONY: enable_x11_forwarding
+enable_x11_forwarding: check_display
+	@if command -v xhost >/dev/null 2>&1; then \
+		echo "Enabling X11 access for Docker with 'xhost +local:docker'"; \
+		xhost +local:docker || true; \
+	else \
+		echo "Warning: xhost not available - cannot enable X11 forwarding"; \
+	fi
+
+.PHONY: disable_x11_forwarding
+disable_x11_forwarding: 
+	@if command -v xhost >/dev/null 2>&1; then \
+		echo "Removing X11 access for Docker with 'xhost -local:docker'"; \
+		xhost -local:docker || true; \
+	else \
+		echo "xhost not available - skipping X11 cleanup"; \
+	fi
+
 .PHONY: adore_cli_setup
 adore_cli_setup: 
 	@echo "Running adore_cli setup... SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
@@ -831,12 +858,8 @@ adore_cli_setup:
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.bash_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history.new
-	@if command -v xhost >/dev/null 2>&1; then \
-		echo "Configuring X11 access for Docker with 'xhost +local:docker'"; \
-		xhost +local:docker; \
-	else \
-		echo "xhost not available - skipping X11 configuration (headless mode)"; \
-	fi
+	@cd ${ADORE_CLI_MAKEFILE_PATH} &&  make enable_x11_forwarding
+
 
 .PHONY: adore_cli_teardown
 adore_cli_teardown:
@@ -844,12 +867,7 @@ adore_cli_teardown:
 	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} down 2>/dev/null || true
 	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} rm -f 2>/dev/null || true
 	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} stop 2>/dev/null || true
-	@if command -v xhost >/dev/null 2>&1; then \
-		echo "Removing X11 access for Docker with 'xhost -local:docker'"; \
-		xhost -local:docker || true; \
-	else \
-		echo "xhost not available - skipping X11 cleanup"; \
-	fi
+	@cd ${ADORE_CLI_MAKEFILE_PATH} &&  make disable_x11_forwarding
 
 .PHONY: adore_cli_start
 adore_cli_start:
