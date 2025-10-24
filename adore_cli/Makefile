@@ -114,9 +114,9 @@ gather_packages:
 	@mkdir -p "${BUILD_CONTEXT_PACKAGES_DIR}"
 	
 	# Recursively search for .deb files in SOURCE_DIRECTORY/vendor
-	@if [ -d "${VENDOR_PATH}" ]; then \
-		echo "Recursively searching for .deb files in: ${VENDOR_PATH}"; \
-		DEB_FILES=$$(find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null || echo ""); \
+	@if [ -d "${VENDOR_PATH}/build" ]; then \
+		echo "Recursively searching for .deb files in: ${VENDOR_PATH}/build"; \
+		DEB_FILES=$$(find "${VENDOR_PATH}/build" -type f -name "*.deb" 2>/dev/null || echo ""); \
 		if [ -n "$$DEB_FILES" ]; then \
 			DEB_COUNT=$$(echo "$$DEB_FILES" | wc -l); \
 			echo "Found $$DEB_COUNT .deb packages"; \
@@ -178,9 +178,9 @@ gather_packages:
 	
 	# Generate packages manifest for change detection
 	@echo "=== Generating packages manifest for change detection ==="
-	@if [ -d "${VENDOR_PATH}" ]; then \
-		PACKAGE_COUNT=$$(find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | wc -l); \
-		find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | \
+	@if [ -d "${VENDOR_PATH}/build" ]; then \
+		PACKAGE_COUNT=$$(find "${VENDOR_PATH}/build" -type f -name "*.deb" 2>/dev/null | wc -l); \
+		find "${VENDOR_PATH}/build" -type f -name "*.deb" 2>/dev/null | \
 		xargs -r sha256sum 2>/dev/null | sort > "${PACKAGES_MANIFEST}"; \
 		echo "Packages manifest created with $$PACKAGE_COUNT entries"; \
 	else \
@@ -253,13 +253,13 @@ debug_run_root:
 debug_packages:
 	@echo "=== Packages Debug Info ==="
 	@echo "SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
-	@echo "VENDOR_PATH: ${VENDOR_PATH}"
+	@echo "VENDOR_PATH: ${VENDOR_PATH}/build"
 	@echo "BUILD_CONTEXT_PACKAGES_DIR: ${BUILD_CONTEXT_PACKAGES_DIR}"
 	@echo "PACKAGES_MANIFEST: ${PACKAGES_MANIFEST}"
 	@echo "PACKAGES_MANIFEST_TXT: ${PACKAGES_MANIFEST_TXT}"
 	@echo ""
 	@echo "Source directory exists: $(shell [ -d '${SOURCE_DIRECTORY}' ] && echo 'yes' || echo 'no')"
-	@echo "Vendor directory exists: $(shell [ -d '${VENDOR_PATH}' ] && echo 'yes' || echo 'no')"
+	@echo "Vendor directory exists: $(shell [ -d '${VENDOR_PATH}/build' ] && echo 'yes' || echo 'no')"
 	@echo "Packages manifest exists: $(shell [ -f '${PACKAGES_MANIFEST}' ] && echo 'yes' || echo 'no')"
 	@echo "Build manifest exists: $(shell [ -f '${PACKAGES_MANIFEST_TXT}' ] && echo 'yes' || echo 'no')"
 	@echo ""
@@ -278,7 +278,7 @@ debug_packages:
 	fi
 	@echo ""
 	@echo ".deb packages found in vendor:"
-	@find "${VENDOR_PATH}" -name "*.deb" -type f 2>/dev/null | head -20 || echo "None found"
+	@find "${VENDOR_PATH}/build" -name "*.deb" -type f 2>/dev/null | head -20 || echo "None found"
 
 .PHONY: test_package_installation
 test_package_installation:

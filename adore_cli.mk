@@ -67,7 +67,7 @@ REQUIREMENTS_HASH_FULL:=$(shell bash ${ADORE_CLI_MAKEFILE_PATH}/tools/requiremen
 REQUIREMENTS_HASH_SHORT:=$(shell echo "${REQUIREMENTS_HASH_FULL}" | cut -c1-7)
 
 # === PACKAGES HASH GENERATION ===
-PACKAGES_SHORT_HASH:=$(shell find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | sort | xargs -r -I {} basename {} 2>/dev/null | sort | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
+PACKAGES_SHORT_HASH:=$(shell find "${VENDOR_PATH}/build" -type f -name "*.deb" 2>/dev/null | sort | xargs -r -I {} basename {} 2>/dev/null | sort | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
 
 # === MANIFEST PATHS ===
 REQUIREMENTS_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/requirements_manifest.sha256
@@ -168,8 +168,8 @@ _generate_current_manifests_only:
 		sort | \
 		xargs -r sha256sum 2>/dev/null | \
 		sort > "${REQUIREMENTS_MANIFEST}" || touch "${REQUIREMENTS_MANIFEST}"
-	@if [ -d "${VENDOR_PATH}" ]; then \
-		find "${VENDOR_PATH}" -type f -name "*.deb" 2>/dev/null | \
+	@if [ -d "${VENDOR_PATH}/build" ]; then \
+		find "${VENDOR_PATH}/build" -type f -name "*.deb" 2>/dev/null | \
 		sort | \
 		xargs -r sha256sum 2>/dev/null | \
 		sort > "${PACKAGES_MANIFEST}"; \
@@ -594,9 +594,9 @@ _build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
 	@echo "  Check build status: make build_status"
 	@echo ""
 	@echo "If you encounter issues:"
-	@echo "  Debug information: make adore_cli_info"
 	@echo "  Force rebuild: make rebuild_force"
 	@echo "  Clean and rebuild: make clean && make build"
+	@echo "  Rebuild from a failing layer: make rebuild_from_layer LAYER=core"
 
 .PHONY: build_adore_cli
 build_adore_cli: clean_tag_history _build_adore_cli_layers ## Build The ADORe CLI Docker Context
@@ -986,7 +986,7 @@ adore_cli_info: ## Show configuration information for ADORe CLI
 	echo "Packages Manifest: ${PACKAGES_MANIFEST}"
 	@echo "=== Paths Check ==="
 	@echo "Called from: $(shell pwd)"
-	@echo "Vendor exists: $(shell [ -d '${VENDOR_PATH}' ] && echo 'yes' || echo 'no')"
+	@echo "Vendor exists: $(shell [ -d '${VENDOR_PATH}/build' ] && echo 'yes' || echo 'no')"
 	@echo "Source is adore_cli: $(shell [ '${SOURCE_DIRECTORY}' = '${ADORE_CLI_MAKEFILE_PATH}' ] && echo 'yes' || echo 'no')"
 
 .PHONY: build_status
@@ -1038,7 +1038,7 @@ show_changes: ## Show detailed information about detected changes
 			diff -u "${LAST_PACKAGES_MANIFEST}" "${PACKAGES_MANIFEST}" || true; \
 		fi; \
 		echo "Current .deb files:"; \
-		find "${VENDOR_PATH}" -name "*.deb" 2>/dev/null | head -10; \
+		find "${VENDOR_PATH}/build" -name "*.deb" 2>/dev/null | head -10; \
 		echo ""; \
 	fi
 
@@ -1233,6 +1233,7 @@ help_cli: ## Show ADORe CLI help
 	@echo ""
 	@echo "Troubleshooting Build Issues:"
 	@echo "  1. make build_status          # Check which layers exist"
+	@echo "  1a. make rebuild_from_layer LAYER=core          # rebuild from failing layer"
 	@echo "  2. make adore_cli_info        # Show configuration"
 	@echo "  3. make show_changes          # See what changed"
 	@echo "  4. make rebuild_force         # Force complete rebuild"
@@ -1240,6 +1241,7 @@ help_cli: ## Show ADORe CLI help
 	@echo "  6. docker system prune -f     # Clean Docker cache if space issues"
 	@echo "  7. docker builder prune       # Stale docker cache can cause non-deterministic failures. Try pruning the docker builder cache."
 	@echo "  8. sudo systemctl restart docker # Frequent network changes such as WIFI changes can break docker routing causing random build failures."
+	@echo "  9. cd vendor/<module> && make build         # If a specific vendor module is failing build just that module"
 
 .PHONY: debug_hashes
 debug_hashes: ## Debug hash calculation
@@ -1254,7 +1256,7 @@ debug_hashes: ## Debug hash calculation
 	@echo "  REQUIREMENTS_HASH_SHORT: ${REQUIREMENTS_HASH_SHORT}"
 	@echo ""
 	@echo "Package files found:"
-	@find "${VENDOR_PATH}" -name "*.deb" 2>/dev/null || echo "  None found"
+	@find "${VENDOR_PATH}/build" -name "*.deb" 2>/dev/null || echo "  None found"
 	@echo ""
 	@echo "Package hash calculation:"
 	@echo "  PACKAGES_SHORT_HASH: ${PACKAGES_SHORT_HASH}"

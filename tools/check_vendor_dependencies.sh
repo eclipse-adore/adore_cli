@@ -15,11 +15,12 @@
 SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
 GREEN="\033[0;32m"
-NC="\033[0m" # No Color
+NC="\033[0m"
 CHECKMARK="${GREEN}✔${NC}"
 
+VENDOR_BUILD_DIR="${SOURCE_DIRECTORY}/vendor/build"
+
 check_vendor_dependencies() {
-    # Set colors for output
     if [[ -n "$TERM" && "$TERM" != "dumb" && "$TERM" != "unknown" ]]; then
         BOLD='\033[1m'
         BLINK='\033[5m'
@@ -34,36 +35,24 @@ check_vendor_dependencies() {
         RESET=''
     fi
     
-    # Calculate current package hash using same method as adore_cli.mk
     current_package_hash=""
-    if [ -n "${SOURCE_DIRECTORY}" ] && [ -d "${SOURCE_DIRECTORY}" ]; then
-        vendor_path="${SOURCE_DIRECTORY}/vendor"
-        if [ -d "$vendor_path" ]; then
-            # Calculate hash of package names only (for determinism)
-            current_package_hash=$(find "$vendor_path" -type f -name "*.deb" 2>/dev/null | \
-                sort | xargs -r -I {} basename {} 2>/dev/null | \
-                sort | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
-        else
-            current_package_hash="0000000"
-        fi
+    if [ -n "${SOURCE_DIRECTORY}" ] && [ -d "${VENDOR_BUILD_DIR}" ]; then
+        current_package_hash=$(find "$VENDOR_BUILD_DIR" -type f -name "*.deb" 2>/dev/null | \
+            sort | xargs -r -I {} basename {} 2>/dev/null | \
+            sort | sha256sum 2>/dev/null | cut -d' ' -f1 2>/dev/null | cut -c1-7 || echo "0000000")
     else
         current_package_hash="0000000"
     fi
     
-    # Get container package hash from USER image tag (PH hash is in user layer)
     container_package_hash=""
     
-    # Extract package hash from current USER image tag (format includes PH<hash>)
     if [ -n "${ADORE_CLI_IMAGE}" ]; then
-        # Extract package hash from tag like: adore_cli:x86_64_main_abc1234_parent_def5678_PH9876543_username_UID1000GID1000
         container_package_hash=$(echo "${ADORE_CLI_IMAGE}" | grep -o 'PH[a-f0-9]\{7\}' | cut -c3-)
     fi
     
-    # If no hash in tag, check built tags file
     if [ -z "$container_package_hash" ] && [ -n "${SOURCE_DIRECTORY}" ]; then
         built_tags_file="${SOURCE_DIRECTORY}/.log/.adore_cli/built_tags"
         if [ -f "$built_tags_file" ]; then
-            # Try to extract from USER tag which should contain package hash
             user_tag=$(grep "^USER=" "$built_tags_file" 2>/dev/null | cut -d'=' -f2)
             if [ -n "$user_tag" ]; then
                 container_package_hash=$(echo "$user_tag" | grep -o 'PH[a-f0-9]\{7\}' | cut -c3-)
@@ -71,26 +60,21 @@ check_vendor_dependencies() {
         fi
     fi
    
-
     printf "    === Installed Packages(.deb) ===\n"
 
-
-    # Count .deb packages in vendor directory
     deb_count=0
-    if [ -d "${SOURCE_DIRECTORY}/vendor" ]; then
-        deb_count=$(find "${SOURCE_DIRECTORY}/vendor" -name "*.deb" -type f 2>/dev/null | wc -l)
+    if [ -d "${VENDOR_BUILD_DIR}" ]; then
+        deb_count=$(find "${VENDOR_BUILD_DIR}" -name "*.deb" -type f 2>/dev/null | wc -l)
     fi
     
-    # Check for missing vendor packages
     if [ "$deb_count" -lt 1 ]; then
         printf "    ${BOLD}${BLINK}${ORANGE}WARNING:${RESET} No vendor dependency packages found!\n" 
         printf "        This may result in missing dependencies when building nodes or libraries.\n"  
         printf "        Build the vendor libraries with 'make build' and try again.\n"
-        printf "        Expected location: ${SOURCE_DIRECTORY}/vendor/*.deb\n"
+        printf "        Expected location: ${VENDOR_BUILD_DIR}/*.deb\n"
         return
     fi
     
-    # Compare package hashes
     if [ -z "$container_package_hash" ]; then
         printf "    ${ORANGE}INFO:${RESET} Unable to determine container package hash\n"
         printf "    Found $deb_count vendor dependency packages\n"
@@ -112,9 +96,8 @@ check_vendor_dependencies() {
         printf "    3. Then restart: ${GREEN}make cli${RESET}\n"
         printf "\n"
         printf "    ${BOLD}Current vendor packages (${deb_count} total):${RESET}\n"
-        # Show first few package names for reference
-        if [ -d "${SOURCE_DIRECTORY}/vendor" ]; then
-            find "${SOURCE_DIRECTORY}/vendor" -name "*.deb" -type f 2>/dev/null | \
+        if [ -d "${VENDOR_BUILD_DIR}" ]; then
+            find "${VENDOR_BUILD_DIR}" -name "*.deb" -type f 2>/dev/null | \
                 head -5 | while read -r deb_file; do
                 printf "        $(basename "$deb_file")\n"
             done
@@ -123,7 +106,6 @@ check_vendor_dependencies() {
             fi
         fi
     else
-
         printf "    ${CHECKMARK} Found $deb_count vendor dependency packages (hash: ${current_package_hash})\n"
     fi
 }
