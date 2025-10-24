@@ -106,6 +106,7 @@ PARENT_BRANCH_SHORT:=$(shell echo "${PARENT_BRANCH}" | sed 's|.*/||' | cut -c1-2
 # === CORE TAGGING LOGIC ===
 # Base tags using shortened branch names
 ADORE_CLI_BASE_TAG_CLEAN:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
+ADORE_CLI_BASE_TAG_CLEAN:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
 ifeq ($(ADORE_CLI_IS_DIRTY),true)
     ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}_dirty
 else
@@ -113,11 +114,12 @@ else
 endif
 
 # Core image tagging with shortened branch names
-ifeq ($(PARENT_IS_ADORE_CLI),true)
-    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
-else
-    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_SHORT_HASH}_RH${REQUIREMENTS_HASH_SHORT}
-endif
+#ifeq ($(PARENT_IS_ADORE_CLI),true)
+#    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
+#else
+#    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_SHORT_HASH}_RH${REQUIREMENTS_HASH_SHORT}
+#endif
+ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_RH${REQUIREMENTS_HASH_SHORT}
 
 # User image tagging with shortened branch names and username truncation if needed
 ifeq ($(PARENT_IS_ADORE_CLI),true)
