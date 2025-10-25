@@ -1,13 +1,9 @@
 # === BUILD ARGUMENTS ===
-# These must be declared before FROM to be available in base image selection
 ARG ADORE_CLI_BASE_IMAGE=adore_cli_base:latest
 
 # === ADORE CLI CORE LAYER ===
-# Extends the base layer with all discovered requirements and dependencies
-# This layer installs all PPAs, APT packages, and Python packages from the project tree
 FROM ${ADORE_CLI_BASE_IMAGE} AS adore_cli_core
 
-# Re-declare ARGs for use within this stage
 ARG ARCH
 ARG BRANCH
 ARG SHORT_HASH
@@ -23,27 +19,20 @@ LABEL org.adore.image-type="core-environment"
 LABEL org.adore.user-agnostic="true"
 
 # === ADORE CLI CORE SPECIFIC PACKAGES ===
-# Install packages specific to ADORe CLI core functionality first
 COPY requirements.adore_cli_core.system /tmp
 WORKDIR /tmp
 
 ENV DEBIAN_FRONTEND=noninteractive
 USER root
 
-RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean && \
-    (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
+RUN apt-get update && \
     apt-get install --no-install-recommends -y \
-        -o Acquire::Check-Valid-Until=false \
         $(sed '/^#/d' *.system | sed '/^$/d' | envsubst)
 
 # === REQUIREMENTS GATHERING AND INSTALLATION ===
-# Copy the gather script and requirements files from build context
 COPY .tmp/requirements /tmp/requirements
 WORKDIR /tmp/requirements
 
-# Validate that requirements were properly gathered
 RUN echo "=== Validating requirements in build context ===" && \
     ls -la . && \
     echo "Combined requirements files:" && \
@@ -56,46 +45,35 @@ RUN echo "=== Validating requirements in build context ===" && \
     cat combined_requirements.ppa 2>/dev/null || echo "No PPA requirements"
 
 # === REPOSITORY AND PPA SETUP ===
-# Add PPAs first (if any) and update package lists
-RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
-    echo "=== Setting up PPAs ===" && \
+RUN echo "=== Setting up PPAs ===" && \
     if [ -f "combined_requirements.ppa" ] && [ -s "combined_requirements.ppa" ]; then \
         echo "Adding PPAs..." && \
-        rm -f /etc/apt/apt.conf.d/docker-clean && \
-        (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
-        apt-get install -y --no-install-recommends \
-            -o Acquire::Check-Valid-Until=false \
-            software-properties-common && \
+        apt-get update && \
+        apt-get install -y --no-install-recommends software-properties-common && \
         while IFS= read -r ppa; do \
             if [ ! -z "$ppa" ] && [ "${ppa#ppa:}" != "$ppa" ]; then \
                 echo "Adding PPA: $ppa" && \
-                (timeout 60 add-apt-repository -y "$ppa" 2>/dev/null || echo "Failed to add PPA: $ppa"); \
+                add-apt-repository -y "$ppa"; \
             fi; \
         done < combined_requirements.ppa && \
-        (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists after PPA setup"); \
+        apt-get update; \
     else \
         echo "No PPAs to add"; \
     fi
 
 # === SYSTEM PACKAGES ===
-# Install system packages discovered from requirements files
-RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
-    --mount=target=/var/cache/apt/archives,type=cache,sharing=locked \
-    echo "=== Installing system packages ===" && \
+RUN echo "=== Installing system packages ===" && \
     if [ -f "combined_requirements.system" ] && [ -s "combined_requirements.system" ]; then \
         echo "Installing packages from combined_requirements.system..." && \
         cat combined_requirements.system && \
         echo "Package count: $(wc -l < combined_requirements.system)" && \
-        rm -f /etc/apt/apt.conf.d/docker-clean && \
-        (timeout 30 apt-get update 2>/dev/null || echo "Using cached package lists") && \
+        apt-get update && \
         PACKAGES=$(cat combined_requirements.system | envsubst | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//') && \
         echo "Processed packages: $PACKAGES" && \
         if [ ! -z "$PACKAGES" ]; then \
-            apt-get install --no-install-recommends -y \
-                -o Acquire::Check-Valid-Until=false \
-                $PACKAGES && \
-            echo "Successfully installed system packages"&& cp combined_requirements.system apt_install.success; \
+            apt-get install --no-install-recommends -y $PACKAGES && \
+            echo "Successfully installed system packages" && \
+            cp combined_requirements.system apt_install.success; \
         else \
             echo "No packages to install"; \
         fi; \
@@ -104,19 +82,17 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     fi
 
 # === PYTHON PACKAGES ===
-RUN --mount=type=cache,target=/root/.cache/pip \
-    echo "=== Installing Python packages ===" && \
+RUN echo "=== Installing Python packages ===" && \
     if [ -f "combined_requirements.pip3" ] && [ -s "combined_requirements.pip3" ]; then \
         cat combined_requirements.pip3 && \
         PACKAGES=$(cat combined_requirements.pip3 | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//') && \
         if [ ! -z "$PACKAGES" ]; then \
-            timeout 600 python3 -m pip install --ignore-installed --break-system-packages $PACKAGES && \
+            python3 -m pip install --ignore-installed --break-system-packages $PACKAGES && \
             cp combined_requirements.pip3 pip_install.success; \
         fi; \
     fi
 
 # === SUCCESS MARKER ===
-# Create a marker file to indicate successful build for later copying
 RUN echo "Build completed successfully" > /tmp/requirements/build.success && \
     echo "Core layer build complete - all requirements processed"
 
