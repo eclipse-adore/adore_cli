@@ -1082,14 +1082,8 @@ try_pull_base_images:
 	    docker tag "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}" "${ADORE_CLI_BASE_IMAGE}"; \
 	else \
 	    echo "✗ Base foundation not found in registry"; \
-	fi; \
-	echo "Trying to pull core environment: $${REGISTRY_PREFIX}${ADORE_CLI_CORE_IMAGE}"; \
-	if docker pull "$${REGISTRY_PREFIX}${ADORE_CLI_CORE_IMAGE}" 2>/dev/null; then \
-	    echo "✓ Pulled core environment from registry"; \
-	    docker tag "$${REGISTRY_PREFIX}${ADORE_CLI_CORE_IMAGE}" "${ADORE_CLI_CORE_IMAGE}"; \
-	else \
-	    echo "✗ Core environment not found in registry"; \
 	fi
+	@make _try_pull_core
 
 .PHONY: push_base_image
 push_base_image:
@@ -1157,8 +1151,11 @@ _try_pull_base:
 
 .PHONY: _try_pull_core
 _try_pull_core:
-	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	REGISTRY_IMAGE="ghcr.io/$${GITHUB_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
+	@GITHUB_REPO=$$(git config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/'); \
+	if [ -z "$$GITHUB_REPO" ]; then \
+	    GITHUB_REPO=$$(git rev-parse --show-superproject-working-tree 2>/dev/null | xargs -I {} git -C {} config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/'); \
+	fi; \
+	REGISTRY_IMAGE="ghcr.io/$$GITHUB_REPO/${ADORE_CLI_CORE_IMAGE}"; \
 	if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \
 	    docker tag "$$REGISTRY_IMAGE" "${ADORE_CLI_CORE_IMAGE}"; \
 	    echo "✓ Pulled core environment from registry"; \
