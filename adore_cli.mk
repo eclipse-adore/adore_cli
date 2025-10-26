@@ -23,7 +23,7 @@ ADORE_CLI_LOG_DIRECTORY ?= ${SOURCE_DIRECTORY}/.log/.adore_cli
 PARENT_IS_ADORE_CLI := $(shell [ "${SOURCE_DIRECTORY}" = "${ADORE_CLI_MAKEFILE_PATH}" ] && echo "true" || echo "false")
 
 # Determine repository URLs for registry operations
-ADORE_CLI_REPO := $(shell cd "${ADORE_CLI_MAKEFILE_PATH}" && git config --get remote.origin.url 2>/dev/null | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]')
+ADORE_CLI_REPO := $(shell cd "${ADORE_CLI_MAKEFILE_PATH}" && git config --get remote.origin.url 2>/dev/null | sed -e 's|.*github.com[:/]||' -e 's|\.git$$||' | tr '[:upper:]' '[:lower:]')
 ifeq ($(ADORE_CLI_REPO),)
     ADORE_CLI_REPO := eclipse-adore/adore_cli
 endif
@@ -31,9 +31,9 @@ endif
 ifeq ($(PARENT_IS_ADORE_CLI),true)
     PARENT_REPO := $(ADORE_CLI_REPO)
 else
-    PARENT_REPO := $(shell git config --get remote.origin.url 2>/dev/null | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]')
+    PARENT_REPO := $(shell git config --get remote.origin.url 2>/dev/null | sed -e 's|.*github.com[:/]||' -e 's|\.git$$||' | tr '[:upper:]' '[:lower:]')
     ifeq ($(PARENT_REPO),)
-        PARENT_REPO := $(shell git rev-parse --show-superproject-working-tree 2>/dev/null | xargs -I {} git -C {} config --get remote.origin.url 2>/dev/null | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]')
+        PARENT_REPO := $(shell git rev-parse --show-superproject-working-tree 2>/dev/null | xargs -I {} git -C {} config --get remote.origin.url 2>/dev/null | sed -e 's|.*github.com[:/]||' -e 's|\.git$$||' | tr '[:upper:]' '[:lower:]')
     endif
 endif
 
