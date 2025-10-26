@@ -1138,8 +1138,11 @@ cleanup_registry_images:
 
 .PHONY: _try_pull_base
 _try_pull_base:
-	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	REGISTRY_IMAGE="ghcr.io/$${GITHUB_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
+	@ADORE_CLI_REPO=$$(cd "${ADORE_CLI_MAKEFILE_PATH}" && git config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]'); \
+	if [ -z "$$ADORE_CLI_REPO" ]; then \
+	    ADORE_CLI_REPO="eclipse-adore/adore_cli"; \
+	fi; \
+	REGISTRY_IMAGE="ghcr.io/$${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
 	if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \
 	    docker tag "$$REGISTRY_IMAGE" "${ADORE_CLI_BASE_IMAGE}"; \
 	    echo "✓ Pulled base foundation from registry"; \
@@ -1151,9 +1154,17 @@ _try_pull_base:
 
 .PHONY: _try_pull_core
 _try_pull_core:
-	@GITHUB_REPO=$$(git config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/'); \
-	if [ -z "$$GITHUB_REPO" ]; then \
-	    GITHUB_REPO=$$(git rev-parse --show-superproject-working-tree 2>/dev/null | xargs -I {} git -C {} config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/'); \
+	@if [ "${PARENT_IS_ADORE_CLI}" = "true" ]; then \
+	    ADORE_CLI_REPO=$$(cd "${ADORE_CLI_MAKEFILE_PATH}" && git config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]'); \
+	    if [ -z "$$ADORE_CLI_REPO" ]; then \
+	        ADORE_CLI_REPO="eclipse-adore/adore_cli"; \
+	    fi; \
+	    GITHUB_REPO="$$ADORE_CLI_REPO"; \
+	else \
+	    GITHUB_REPO=$$(git config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]'); \
+	    if [ -z "$$GITHUB_REPO" ]; then \
+	        GITHUB_REPO=$$(git rev-parse --show-superproject-working-tree 2>/dev/null | xargs -I {} git -C {} config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]'); \
+	    fi; \
 	fi; \
 	REGISTRY_IMAGE="ghcr.io/$$GITHUB_REPO/${ADORE_CLI_CORE_IMAGE}"; \
 	if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \
