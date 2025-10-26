@@ -22,6 +22,21 @@ ADORE_CLI_LOG_DIRECTORY ?= ${SOURCE_DIRECTORY}/.log/.adore_cli
 # Determine if parent is adore_cli
 PARENT_IS_ADORE_CLI := $(shell [ "${SOURCE_DIRECTORY}" = "${ADORE_CLI_MAKEFILE_PATH}" ] && echo "true" || echo "false")
 
+# Determine repository URLs for registry operations
+ADORE_CLI_REPO := $(shell cd "${ADORE_CLI_MAKEFILE_PATH}" && git config --get remote.origin.url 2>/dev/null | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]')
+ifeq ($(ADORE_CLI_REPO),)
+    ADORE_CLI_REPO := eclipse-adore/adore_cli
+endif
+
+ifeq ($(PARENT_IS_ADORE_CLI),true)
+    PARENT_REPO := $(ADORE_CLI_REPO)
+else
+    PARENT_REPO := $(shell git config --get remote.origin.url 2>/dev/null | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]')
+    ifeq ($(PARENT_REPO),)
+        PARENT_REPO := $(shell git rev-parse --show-superproject-working-tree 2>/dev/null | xargs -I {} git -C {} config --get remote.origin.url 2>/dev/null | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]')
+    endif
+endif
+
 .EXPORT_ALL_VARIABLES:
 
 # === ROS AND OS CONFIGURATION ===
@@ -1054,17 +1069,19 @@ reset_change_tracking: ## Reset change tracking (force rebuild on next cli)
 .PHONY: registry_status
 registry_status:
 	@echo "=== Registry Status ==="
-	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
-	echo "Registry: $${REGISTRY_PREFIX}"; \
-	echo "Checking base foundation: $${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}"; \
-	if docker manifest inspect "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}" >/dev/null 2>&1; then \
+	@echo "ADORe CLI Repository: ${ADORE_CLI_REPO}"; \
+	echo "Parent Repository: ${PARENT_REPO}"; \
+	echo ""; \
+	BASE_REGISTRY="ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
+	CORE_REGISTRY="ghcr.io/${PARENT_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
+	echo "Checking base foundation: $$BASE_REGISTRY"; \
+	if docker manifest inspect "$$BASE_REGISTRY" >/dev/null 2>&1; then \
 	    echo "  ✓ Available in registry"; \
 	else \
 	    echo "  ✗ Not found in registry"; \
 	fi; \
-	echo "Checking core environment: $${REGISTRY_PREFIX}${ADORE_CLI_CORE_IMAGE}"; \
-	if docker manifest inspect "$${REGISTRY_PREFIX}${ADORE_CLI_CORE_IMAGE}" >/dev/null 2>&1; then \
+	echo "Checking core environment: $$CORE_REGISTRY"; \
+	if docker manifest inspect "$$CORE_REGISTRY" >/dev/null 2>&1; then \
 	    echo "  ✓ Available in registry"; \
 	else \
 	    echo "  ✗ Not found in registry"; \
@@ -1073,8 +1090,7 @@ registry_status:
 .PHONY: try_pull_base_images
 try_pull_base_images:
 	@echo "=== Attempting to pull base and core images from registry ==="
-	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
+	@REGISTRY_PREFIX="ghcr.io/${ADORE_CLI_REPO}/"; \
 	echo "Registry prefix: $${REGISTRY_PREFIX}"; \
 	echo "Trying to pull base foundation: $${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}"; \
 	if docker pull "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}" 2>/dev/null; then \
@@ -1088,8 +1104,7 @@ try_pull_base_images:
 .PHONY: push_base_image
 push_base_image:
 	@echo "=== Pushing base image to registry ==="
-	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
+	@REGISTRY_PREFIX="ghcr.io/${ADORE_CLI_REPO}/"; \
 	echo "Registry prefix: $${REGISTRY_PREFIX}"; \
 	if docker image inspect "${ADORE_CLI_BASE_IMAGE}" >/dev/null 2>&1; then \
 	    echo "Tagging and pushing base foundation: ${ADORE_CLI_BASE_IMAGE}"; \
@@ -1102,9 +1117,8 @@ push_base_image:
 
 .PHONY: push_core_image
 push_core_image:
-	@echo "=== Pushing base image to registry ==="
-	@GITHUB_REPO=$$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]'); \
-	REGISTRY_PREFIX="ghcr.io/$${GITHUB_REPO}/"; \
+	@echo "=== Pushing core image to registry ==="
+	@REGISTRY_PREFIX="ghcr.io/${PARENT_REPO}/"; \
 	echo "Registry prefix: $${REGISTRY_PREFIX}"; \
 	if docker image inspect "${ADORE_CLI_CORE_IMAGE}" >/dev/null 2>&1; then \
 	    echo "Tagging and pushing core environment: ${ADORE_CLI_CORE_IMAGE}"; \
@@ -1138,13 +1152,9 @@ cleanup_registry_images:
 
 .PHONY: _try_pull_base
 _try_pull_base:
-	@ADORE_CLI_REPO=$$(cd "${ADORE_CLI_MAKEFILE_PATH}" && git config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]'); \
-	if [ -z "$$ADORE_CLI_REPO" ]; then \
-	    ADORE_CLI_REPO="eclipse-adore/adore_cli"; \
-	fi; \
-	REGISTRY_IMAGE="ghcr.io/$${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
-	if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \
-	    docker tag "$$REGISTRY_IMAGE" "${ADORE_CLI_BASE_IMAGE}"; \
+	@REGISTRY_PREFIX="ghcr.io/${ADORE_CLI_REPO}/"; \
+	if docker pull "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}" 2>/dev/null; then \
+	    docker tag "$${REGISTRY_PREFIX}${ADORE_CLI_BASE_IMAGE}" "${ADORE_CLI_BASE_IMAGE}"; \
 	    echo "✓ Pulled base foundation from registry"; \
 	    exit 0; \
 	else \
@@ -1154,19 +1164,7 @@ _try_pull_base:
 
 .PHONY: _try_pull_core
 _try_pull_core:
-	@if [ "${PARENT_IS_ADORE_CLI}" = "true" ]; then \
-	    ADORE_CLI_REPO=$$(cd "${ADORE_CLI_MAKEFILE_PATH}" && git config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]'); \
-	    if [ -z "$$ADORE_CLI_REPO" ]; then \
-	        ADORE_CLI_REPO="eclipse-adore/adore_cli"; \
-	    fi; \
-	    GITHUB_REPO="$$ADORE_CLI_REPO"; \
-	else \
-	    GITHUB_REPO=$$(git config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]'); \
-	    if [ -z "$$GITHUB_REPO" ]; then \
-	        GITHUB_REPO=$$(git rev-parse --show-superproject-working-tree 2>/dev/null | xargs -I {} git -C {} config --get remote.origin.url | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | tr '[:upper:]' '[:lower:]'); \
-	    fi; \
-	fi; \
-	REGISTRY_IMAGE="ghcr.io/$$GITHUB_REPO/${ADORE_CLI_CORE_IMAGE}"; \
+	@REGISTRY_IMAGE="ghcr.io/${PARENT_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
 	if docker pull "$$REGISTRY_IMAGE" 2>/dev/null; then \
 	    docker tag "$$REGISTRY_IMAGE" "${ADORE_CLI_CORE_IMAGE}"; \
 	    echo "✓ Pulled core environment from registry"; \
