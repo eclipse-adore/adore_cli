@@ -60,9 +60,9 @@ _git_repo_name() {
         fi
     fi
 }
-_git_branch_name() {    
-    git branch 2>/dev/null | awk '/^\*/ { print $2 }'
-}    
+_git_branch_name() {
+    git rev-parse --abbrev-ref HEAD 2>/dev/null
+}
 _git_hash() {
     git rev-parse --short HEAD 2>/dev/null
 }
@@ -72,10 +72,9 @@ _git_is_dirty() {
 git_prompt_info_all() {
     local branch=$(_git_branch_name)
     if [[ -n $branch ]]; then
-        local repo=$(_git_repo_name)
         local hash=$(_git_hash)
         local dirty=$(_git_is_dirty)
-        echo "%{$fg_bold[blue]%}(%{$fg_bold[red]%}$repo:$branch:$hash$dirty%{$fg[blue]%})"
+        echo "%{$fg_bold[blue]%}(%{$fg_bold[red]%}$branch:$hash$dirty%{$fg[blue]%})"
     fi
 }
 setopt prompt_subst

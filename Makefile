@@ -26,6 +26,7 @@ GID:=${USER_GID}
 
 # === INCLUDES ===
 include ${ROOT_DIR}/adore_cli.mk
+include ${ROOT_DIR}/package.mk
 -include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 
 # === BUILD TARGETS ===

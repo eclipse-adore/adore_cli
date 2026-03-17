@@ -2,3 +2,5 @@
 # cli docker context with one requirement/dependency per line.  
 # They will be installed in the docker image produced by 'Dockerfile.adore_cli_core'
 setuptools 
+eclipse-zenoh
+

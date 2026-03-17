@@ -4,7 +4,9 @@
 [![ROS2](https://img.shields.io/badge/ros2-jazzy-blue?style=for-the-badge&logo=ros&logoColor=white)](https://docs.ros.org/en/jazzy/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 
-A sophisticated, multi-layer Docker-based development environment for ROS2 projects with intelligent caching, automated dependency management, and seamless developer experience.
+A sophisticated, multi-layer Docker-based development environment for ROS2 
+projects with intelligent caching, automated dependency management, 
+and seamless developer experience.
 
 ## 🚀 Quick Start
 

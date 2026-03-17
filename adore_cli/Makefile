@@ -1,6 +1,8 @@
 # === USER LAYER MAKEFILE ===
 # Builds the final ADORe CLI user-customized layer
-# This layer adds user account, installs .deb packages, and provides the final development environment
+# This layer installs .deb packages and provides the final development environment.
+# User account creation has been moved to the entrypoint (runtime), so this image
+# is shareable across all users with the same codebase/requirements/packages state.
 
 SHELL := /bin/bash
 MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
@@ -15,7 +17,6 @@ DOCKER_CONFIG?=
 SUBMODULES_PATH?=$(shell realpath "${ROOT_DIR}/..")
 ROS_DISTRO?=jazzy
 
-# Determine source and log directories
 ifneq ($(SOURCE_DIRECTORY),)
     LOG_DIR:=${SOURCE_DIRECTORY}/.log/.adore_cli
     VENDOR_PATH:=${SOURCE_DIRECTORY}/vendor
@@ -43,7 +44,6 @@ BUILD_CONTEXT_PACKAGES_DIR:=packages
 PACKAGES_MANIFEST:=${SOURCE_DIRECTORY}/.log/.adore_cli/packages_manifest.sha256
 PACKAGES_MANIFEST_TXT:=packages_manifest.txt
 
-# Target: build
 .PHONY: build
 build: clean gather_packages
 	@echo "Building ADORe CLI user layer..."
@@ -65,10 +65,6 @@ build: clean gather_packages
 			--build-arg PARENT_BRANCH=${PARENT_BRANCH} \
 			--build-arg PARENT_SHORT_HASH=${PARENT_SHORT_HASH} \
 			--build-arg ARCH=${ARCH} \
-			--build-arg USER=${USER} \
-			--build-arg UID=${UID} \
-			--build-arg GID=${GID} \
-			--build-arg HOSTNAME=${HOSTNAME:-ADORe-CLI} \
 			--load . ; \
 	else \
 		echo "Building user layer (native): ${ADORE_CLI_IMAGE}"; \
@@ -82,16 +78,11 @@ build: clean gather_packages
 			--build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
 			--build-arg PARENT_BRANCH=${PARENT_BRANCH} \
 			--build-arg PARENT_SHORT_HASH=${PARENT_SHORT_HASH} \
-			--build-arg ARCH=${ARCH} \
-			--build-arg USER=${USER} \
-			--build-arg UID=${UID} \
-			--build-arg GID=${GID} \
-			--build-arg HOSTNAME=${HOSTNAME:-ADORe-CLI} . ; \
+			--build-arg ARCH=${ARCH} . ; \
 	fi
 	@echo "=== Copying packages manifest from successful build ==="
 	@make copy_packages_from_container
 
-# Target: gather_packages
 .PHONY: gather_packages
 gather_packages:
 	@echo "=== Gathering .deb packages for user layer ==="
@@ -99,21 +90,17 @@ gather_packages:
 	@echo "LOG_DIR: ${LOG_DIR}"
 	@echo "VENDOR_PATH: ${VENDOR_PATH}"
 	@echo "Build context: $(shell pwd)"
-	
-	# Clean up any existing temp directories
+
 	@rm -rf "${BUILD_TEMP_DIR}" 2>/dev/null || true
 	@rm -rf "${BUILD_CONTEXT_PACKAGES_DIR}" 2>/dev/null || true
 	@rm -f "${PACKAGES_MANIFEST_TXT}" 2>/dev/null || true
-	
-	# Always create the log directory for packages
+
 	@echo "Creating log packages directory: ${LOG_DIR}/packages"
 	@mkdir -p "${LOG_DIR}/packages"
-	
-	# Always create local build context packages directory (required for Docker COPY)
+
 	@echo "Creating build context packages directory: ./${BUILD_CONTEXT_PACKAGES_DIR}"
 	@mkdir -p "${BUILD_CONTEXT_PACKAGES_DIR}"
-	
-	# Recursively search for .deb files in SOURCE_DIRECTORY/vendor
+
 	@if [ -d "${VENDOR_PATH}/build" ]; then \
 		echo "Recursively searching for .deb files in: ${VENDOR_PATH}/build"; \
 		DEB_FILES=$$(find "${VENDOR_PATH}/build" -type f -name "*.deb" 2>/dev/null || echo ""); \
@@ -133,8 +120,7 @@ gather_packages:
 	else \
 		echo "Vendor directory not found: ${VENDOR_PATH}"; \
 	fi
-	
-	# Copy packages from log directory to local build context for Docker
+
 	@echo "Copying packages from log to build context..."
 	@if [ -d "${LOG_DIR}/packages" ]; then \
 		AVAILABLE_DEBS=$$(find "${LOG_DIR}/packages" -name "*.deb" 2>/dev/null || echo ""); \
@@ -148,16 +134,13 @@ gather_packages:
 			echo "No .deb packages found in log directory"; \
 		fi; \
 	fi
-	
-	# Always ensure directory exists with a placeholder for Docker COPY
+
 	@echo "Ensuring build context packages directory is not empty..."
 	@touch "${BUILD_CONTEXT_PACKAGES_DIR}/.gitkeep"
-	
-	# Generate package manifest for Docker build context (this ensures rebuild when packages change)
+
 	@echo "=== Generating package manifest for build context ==="
 	@if [ -d "${BUILD_CONTEXT_PACKAGES_DIR}" ]; then \
 		echo "# Package manifest for ADORe CLI user layer" > "${PACKAGES_MANIFEST_TXT}"; \
-#		echo "# Generated: $$(date)" >> "${PACKAGES_MANIFEST_TXT}"; \
 		PACKAGE_COUNT=$$(find "${BUILD_CONTEXT_PACKAGES_DIR}" -name "*.deb" 2>/dev/null | wc -l); \
 		echo "# Total packages: $$PACKAGE_COUNT" >> "${PACKAGES_MANIFEST_TXT}"; \
 		if [ "$$PACKAGE_COUNT" -gt 0 ]; then \
@@ -170,13 +153,11 @@ gather_packages:
 		fi; \
 		echo "Package manifest created: ${PACKAGES_MANIFEST_TXT}"; \
 	fi
-	
-	# Set proper permissions
+
 	@find "${BUILD_CONTEXT_PACKAGES_DIR}" -type d -exec chmod 755 {} \; 2>/dev/null || true
 	@find "${BUILD_CONTEXT_PACKAGES_DIR}" -type f -exec chmod 644 {} \; 2>/dev/null || true
 	@find "${BUILD_CONTEXT_PACKAGES_DIR}" -exec touch -t 197001010000 {} \; 2>/dev/null || true
-	
-	# Generate packages manifest for change detection
+
 	@echo "=== Generating packages manifest for change detection ==="
 	@if [ -d "${VENDOR_PATH}/build" ]; then \
 		PACKAGE_COUNT=$$(find "${VENDOR_PATH}/build" -type f -name "*.deb" 2>/dev/null | wc -l); \
@@ -187,7 +168,7 @@ gather_packages:
 		touch "${PACKAGES_MANIFEST}"; \
 		echo "Packages manifest created with 0 entries"; \
 	fi
-	
+
 	@echo "Final build context packages directory:"
 	@ls -la "${BUILD_CONTEXT_PACKAGES_DIR}/" 2>/dev/null || echo "Failed to list packages directory"
 	@echo "Final log packages directory:"
@@ -202,7 +183,6 @@ gather_packages:
 	fi
 	@echo "=== Package gathering complete ==="
 
-# Target: copy_packages_from_container
 .PHONY: copy_packages_from_container
 copy_packages_from_container:
 	@echo "=== Copying packages from successful build ==="
@@ -233,7 +213,6 @@ copy_packages_from_container:
 		echo "Error: User image ${ADORE_CLI_IMAGE} not found"; \
 	fi
 
-# Target: clean
 .PHONY: clean
 clean:
 	@echo "Cleaning user build artifacts..."

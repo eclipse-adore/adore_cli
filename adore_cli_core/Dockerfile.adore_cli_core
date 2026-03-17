@@ -29,69 +29,6 @@ RUN apt-get update && \
     apt-get install --no-install-recommends -y \
         $(sed '/^#/d' *.system | sed '/^$/d' | envsubst)
 
-# === REQUIREMENTS GATHERING AND INSTALLATION ===
-COPY .tmp/requirements /tmp/requirements
-WORKDIR /tmp/requirements
-
-RUN echo "=== Validating requirements in build context ===" && \
-    ls -la . && \
-    echo "Combined requirements files:" && \
-    ls -la combined_* 2>/dev/null || echo "No combined files found" && \
-    echo "Contents of combined_requirements.system:" && \
-    cat combined_requirements.system 2>/dev/null || echo "No system requirements" && \
-    echo "Contents of combined_requirements.pip3:" && \
-    cat combined_requirements.pip3 2>/dev/null || echo "No pip3 requirements" && \
-    echo "Contents of combined_requirements.ppa:" && \
-    cat combined_requirements.ppa 2>/dev/null || echo "No PPA requirements"
-
-# === REPOSITORY AND PPA SETUP ===
-RUN echo "=== Setting up PPAs ===" && \
-    if [ -f "combined_requirements.ppa" ] && [ -s "combined_requirements.ppa" ]; then \
-        echo "Adding PPAs..." && \
-        apt-get update && \
-        apt-get install -y --no-install-recommends software-properties-common && \
-        while IFS= read -r ppa; do \
-            if [ ! -z "$ppa" ] && [ "${ppa#ppa:}" != "$ppa" ]; then \
-                echo "Adding PPA: $ppa" && \
-                add-apt-repository -y "$ppa"; \
-            fi; \
-        done < combined_requirements.ppa && \
-        apt-get update; \
-    else \
-        echo "No PPAs to add"; \
-    fi
-
-# === SYSTEM PACKAGES ===
-RUN echo "=== Installing system packages ===" && \
-    if [ -f "combined_requirements.system" ] && [ -s "combined_requirements.system" ]; then \
-        echo "Installing packages from combined_requirements.system..." && \
-        cat combined_requirements.system && \
-        echo "Package count: $(wc -l < combined_requirements.system)" && \
-        apt-get update && \
-        PACKAGES=$(cat combined_requirements.system | envsubst | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//') && \
-        echo "Processed packages: $PACKAGES" && \
-        if [ ! -z "$PACKAGES" ]; then \
-            apt-get install --no-install-recommends -y $PACKAGES && \
-            echo "Successfully installed system packages" && \
-            cp combined_requirements.system apt_install.success; \
-        else \
-            echo "No packages to install"; \
-        fi; \
-    else \
-        echo "No system packages to install"; \
-    fi
-
-# === PYTHON PACKAGES ===
-RUN echo "=== Installing Python packages ===" && \
-    if [ -f "combined_requirements.pip3" ] && [ -s "combined_requirements.pip3" ]; then \
-        cat combined_requirements.pip3 && \
-        PACKAGES=$(cat combined_requirements.pip3 | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//') && \
-        if [ ! -z "$PACKAGES" ]; then \
-            python3 -m pip install --ignore-installed --break-system-packages $PACKAGES && \
-            cp combined_requirements.pip3 pip_install.success; \
-        fi; \
-    fi
-
 # === SUCCESS MARKER ===
 RUN echo "Build completed successfully" > /tmp/requirements/build.success && \
     echo "Core layer build complete - all requirements processed"

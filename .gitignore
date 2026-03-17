@@ -10,3 +10,4 @@ build
 ros2_workspace
 adore_cli/packages
 adore_cli/packages_manifest.txt
+.env

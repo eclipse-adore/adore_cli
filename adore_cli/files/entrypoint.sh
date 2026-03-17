@@ -12,72 +12,90 @@
 # SPDX-License-Identifier: EPL-2.0
 # ********************************************************************************
 
-set -eo pipefail
-trap : TERM INT
+# Do NOT use set -e here — this is PID 1. Any unhandled error would kill the
+# container. Each section handles its own failures explicitly.
+set -o pipefail
+
+TARGET_USER="${USER:-adore}"
+TARGET_UID="${UID:-1000}"
+TARGET_GID="${GID:-1000}"
 
 echo "Starting ADORe CLI entrypoint..."
+echo "User: $TARGET_USER (UID=$TARGET_UID, GID=$TARGET_GID)"
 
-mkdir -p /var/log/ros2/rsyslog
-chown -R ${UID:-1000}:${GID:-1000} /var/log/ros2
+# === DYNAMIC USER CREATION ===
+getent group "$TARGET_GID" >/dev/null 2>&1 || groupadd --gid "$TARGET_GID" "$TARGET_USER" 2>/dev/null || true
 
+if getent passwd "$TARGET_UID" >/dev/null 2>&1; then
+    EXISTING_USER=$(getent passwd "$TARGET_UID" | cut -d: -f1)
+    if [ "$EXISTING_USER" != "$TARGET_USER" ]; then
+        usermod -l "$TARGET_USER" "$EXISTING_USER" 2>/dev/null || true
+        usermod -d "/home/$TARGET_USER" -m "$TARGET_USER" 2>/dev/null || true
+    fi
+else
+    useradd --create-home --uid "$TARGET_UID" --gid "$TARGET_GID" --shell /bin/zsh "$TARGET_USER" 2>/dev/null || true
+fi
+
+HOME_DIR=$(getent passwd "$TARGET_UID" | cut -d: -f6)
+HOME_DIR="${HOME_DIR:-/home/$TARGET_USER}"
+mkdir -p "$HOME_DIR"
+[ ! -f "$HOME_DIR/.zshrc" ] && cp /etc/skel/.zshrc "$HOME_DIR/" 2>/dev/null || true
+chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/dev/null || true
+
+usermod -aG tracing "$TARGET_USER" 2>/dev/null || true
+usermod -aG syslog  "$TARGET_USER" 2>/dev/null || true
+
+echo "$TARGET_USER ALL = NOPASSWD : /usr/sbin/rsyslogd, /usr/bin/apt-get, /usr/bin/apt, /usr/bin/python3, /usr/bin/apt-file, /usr/bin/apt-cache, /usr/bin/aptitude" >> /etc/sudoers 2>/dev/null || true
+
+chown -R "$TARGET_UID:$TARGET_GID" /var/log/ros2 2>/dev/null || true
+chown -R "$TARGET_UID:$TARGET_GID" /var/spool/rsyslog 2>/dev/null || true
+
+# === ROS / PROJECT SETUP ===
 if [ -f /tmp/adore/setup.sh ]; then
     echo "Found setup.sh, sourcing..."
-    export SHELL=/bin/bash
     (
         set +u
-        source /opt/ros/${ROS_DISTRO}/setup.bash || echo "ROS setup failed"
-        source /tmp/adore/setup.sh || echo "Project setup failed"
-    ) || echo "Warning: Failed to source setup scripts"
+        source /opt/ros/${ROS_DISTRO}/setup.bash 2>/dev/null || true
+        source /tmp/adore/setup.sh 2>/dev/null || true
+    ) || true
 else
-    echo "No setup.sh found at /tmp/adore/setup.sh"
     (
         set +u
-        source /opt/ros/${ROS_DISTRO}/setup.bash || echo "ROS setup failed"
-    ) || echo "Warning: Failed to source ROS setup"
+        source /opt/ros/${ROS_DISTRO}/setup.bash 2>/dev/null || true
+    ) || true
 fi
 
 if [ -f /tmp/adore/adore_cli.env ]; then
-    echo "Loading ADORe CLI environment variables..."
-    source /tmp/adore/adore_cli.env
+    source /tmp/adore/adore_cli.env 2>/dev/null || true
 elif [ -f /tmp/adore/.env ]; then
-    echo "Loading environment variables from .env..."
-    source /tmp/adore/.env
+    source /tmp/adore/.env 2>/dev/null || true
 fi
 
+# === DISPLAY SETUP ===
 XVFB_PID=""
 detect_display() {
-    if [ "${VIRTUAL_DISPLAY:-false}" = "true" ]; then
-        echo "VIRTUAL_DISPLAY=true, forcing virtual display"
-        return 1
-    fi
-    
+    [ "${VIRTUAL_DISPLAY:-false}" = "true" ] && return 1
     if [ -d "/sys/class/drm" ]; then
         for status_file in /sys/class/drm/card*/status; do
-            if [ -f "$status_file" ] && [ "$(cat "$status_file" 2>/dev/null)" = "connected" ]; then
-                echo "Physical display detected"
-                return 0
-            fi
+            [ -f "$status_file" ] && [ "$(cat "$status_file" 2>/dev/null)" = "connected" ] && return 0
         done
     fi
-    
-    echo "No physical display detected"
     return 1
 }
 
 if ! detect_display; then
     echo "Starting virtual display on :99..."
-    Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset > /dev/null 2>&1 &
+    Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset >/dev/null 2>&1 &
     XVFB_PID=$!
-    echo "Virtual display started (PID: $XVFB_PID), DISPLAY=$DISPLAY"
+    echo "Virtual display started (PID: $XVFB_PID)"
     sleep 2
 fi
 
-echo "Starting rsyslog daemon..."
-export RSYSLOG_PROTOCOL=${RSYSLOG_PROTOCOL:-udp}
+# === RSYSLOG SETUP ===
+export RSYSLOG_PROTOCOL="${RSYSLOG_PROTOCOL:-udp}"
 
 if [ -n "${RSYSLOG_PORT:-}" ]; then
-    export RSYSLOG_PORT="${RSYSLOG_PORT}"
-    if [ "${RSYSLOG_PROTOCOL}" = "tcp" ]; then
+    if [ "$RSYSLOG_PROTOCOL" = "tcp" ]; then
         export UDP_INPUT_CONFIG=""
         export TCP_INPUT_CONFIG="module(load=\"imtcp\")
 input(type=\"imtcp\" port=\"${RSYSLOG_PORT}\")"
@@ -92,36 +110,35 @@ else
     export TCP_INPUT_CONFIG=""
 fi
 
-echo "DEBUG: RSYSLOG_PORT='${RSYSLOG_PORT}'"
-echo "DEBUG: RSYSLOG_PROTOCOL='${RSYSLOG_PROTOCOL}'"
-echo "DEBUG: UDP_INPUT_CONFIG='${UDP_INPUT_CONFIG}'"
-echo "DEBUG: TCP_INPUT_CONFIG='${TCP_INPUT_CONFIG}'"
+mkdir -p /tmp/adore/.log/rsyslog /var/log/ros2/rsyslog
 
+RSYSLOG_PID=""
 RSYSLOG_CONFIG="/var/log/ros2/rsyslog/rsyslog.conf"
-envsubst '${UID} ${GID} ${USER} ${RSYSLOG_PORT} ${RSYSLOG_FORWARD_HOST} ${RSYSLOG_FORWARD_PORT} ${RSYSLOG_FORWARD_PROTOCOL} ${UDP_INPUT_CONFIG} ${TCP_INPUT_CONFIG}' < /etc/rsyslog.conf.template > "$RSYSLOG_CONFIG"
-chmod 644 "$RSYSLOG_CONFIG"
-chown ${UID:-1000}:${GID:-1000} "$RSYSLOG_CONFIG"
-
-touch /var/log/ros2/rsyslog/rsyslogd.log
-sudo rsyslogd -n -f "$RSYSLOG_CONFIG" > /var/log/ros2/rsyslog/rsyslogd.log 2>&1 &
-RSYSLOG_PID=$!
+if [ -f /etc/rsyslog.conf.template ]; then
+    envsubst '${UID} ${GID} ${USER} ${RSYSLOG_PORT} ${RSYSLOG_FORWARD_HOST} ${RSYSLOG_FORWARD_PORT} ${RSYSLOG_FORWARD_PROTOCOL} ${UDP_INPUT_CONFIG} ${TCP_INPUT_CONFIG}' \
+        < /etc/rsyslog.conf.template > "$RSYSLOG_CONFIG" 2>/dev/null || true
+    chmod 644 "$RSYSLOG_CONFIG" 2>/dev/null || true
+    chown "$TARGET_UID:$TARGET_GID" "$RSYSLOG_CONFIG" 2>/dev/null || true
+    touch /var/log/ros2/rsyslog/rsyslogd.log
+    rsyslogd -n -f "$RSYSLOG_CONFIG" >/var/log/ros2/rsyslog/rsyslogd.log 2>&1 &
+    RSYSLOG_PID=$!
+    echo "Rsyslog started (PID: $RSYSLOG_PID)"
+else
+    echo "Warning: rsyslog template not found, skipping rsyslog"
+fi
 
 shutdown() {
     echo "Shutting down services..."
-    sudo kill $RSYSLOG_PID 2>/dev/null || true
-    if [ -n "$XVFB_PID" ]; then
-        echo "Stopping virtual display..."
-        kill $XVFB_PID 2>/dev/null || true
-    fi
+    [ -n "$RSYSLOG_PID" ] && kill "$RSYSLOG_PID" 2>/dev/null || true
+    [ -n "$XVFB_PID" ]   && kill "$XVFB_PID"   2>/dev/null || true
     exit 0
 }
 trap shutdown TERM INT
 
 echo "ADORe CLI ready"
-echo "Rsyslog PID: $RSYSLOG_PID"
-echo "Rsyslog logs: /var/log/ros2/rsyslog/rsyslogd.log"
-if [ -n "$XVFB_PID" ]; then
-    echo "Virtual display PID: $XVFB_PID"
-fi
+[ -n "$XVFB_PID" ] && echo "Virtual display PID: $XVFB_PID"
 
-wait $RSYSLOG_PID
+# Keep container alive. Interactive sessions attach via:
+#   docker exec --user <uid>:<gid> -it <container> /bin/zsh
+sleep infinity &
+wait $!

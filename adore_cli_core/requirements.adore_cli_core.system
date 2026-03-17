@@ -17,27 +17,7 @@ ros-${ROS_DISTRO}-foxglove-bridge
 # Development Tools
 
 ## Plotting
-ros-${ROS_DISTRO}-plotjuggler-ros
-ros-${ROS_DISTRO}-plotjuggler
 ros-${ROS_DISTRO}-rosbridge-suite
-
-## Network debugging tools
-telnet
-netcat-traditional
-traceroute
-nmap
-
-vim
-curl
-wget
-htop
-fzf
-inetutils-ping
-x11-apps
-cowsay
-gdb
-gdbserver
-clang-format
 
 #Tracing tools
 ros-${ROS_DISTRO}-tracetools

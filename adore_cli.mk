@@ -7,22 +7,17 @@ SHELL := /bin/bash
 MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
 .NOTPARALLEL:
 
-# Get the adore_cli makefile path
 ADORE_CLI_MAKEFILE_PATH := $(shell dirname "$(realpath $(lastword $(MAKEFILE_LIST)))")
 
-# Only set these if they haven't been set by a parent makefile
 ROOT_DIR ?= ${ADORE_CLI_MAKEFILE_PATH}
 SOURCE_DIRECTORY ?= ${ADORE_CLI_MAKEFILE_PATH}
 
-# Set other paths relative to SOURCE_DIRECTORY (not ROOT_DIR)
 SUBMODULES_PATH ?= ${SOURCE_DIRECTORY}/tools
 VENDOR_PATH ?= ${SOURCE_DIRECTORY}/vendor
 ADORE_CLI_LOG_DIRECTORY ?= ${SOURCE_DIRECTORY}/.log/.adore_cli
 
-# Determine if parent is adore_cli
 PARENT_IS_ADORE_CLI := $(shell [ "${SOURCE_DIRECTORY}" = "${ADORE_CLI_MAKEFILE_PATH}" ] && echo "true" || echo "false")
 
-# Determine repository URLs for registry operations
 ADORE_CLI_REPO := $(shell cd "${ADORE_CLI_MAKEFILE_PATH}" && git config --get remote.origin.url 2>/dev/null | sed -e 's|.*github.com[:/]||' -e 's|\.git$$||' | tr '[:upper:]' '[:lower:]')
 ifeq ($(ADORE_CLI_REPO),)
     ADORE_CLI_REPO := eclipse-adore/adore_cli
@@ -50,7 +45,6 @@ HOSTNAME ?= "ADORe-CLI"
 ADORE_CLI_PROJECT:=adore_cli
 ADORE_CLI_MAKEFILE_PATH:=$(shell realpath "$(shell dirname "$(lastword $(MAKEFILE_LIST))")")
 
-# Default GITHUB_REPOSITORY to prevent undefined variable warnings
 GITHUB_REPOSITORY?=eclipse-adore/adore_cli
 
 # === PATH CONFIGURATION ===
@@ -101,10 +95,8 @@ DOCKER_COMPOSE_FILE?=${ADORE_CLI_MAKEFILE_PATH}/docker-compose.yaml
 REPO_DIRECTORY:=${ADORE_CLI_MAKEFILE_PATH}
 
 # === USER CONFIGURATION ===
-# Use different variable names to avoid conflicts with shell built-ins
 USER_UID := $(shell id -u)
 USER_GID := $(shell id -g)
-# For backward compatibility, also set UID/GID but handle them carefully
 UID ?= $(USER_UID)
 GID ?= $(USER_GID)
 
@@ -113,14 +105,10 @@ GID ?= $(USER_GID)
 # 1. Remove everything before and including "/" (e.g., feature/docs → docs)
 # 2. Truncate to max 20 characters
 # 3. Remove trailing underscores
-
-# Shortened branch names for tagging (max 20 chars, no prefixes)
 ADORE_CLI_BRANCH_SHORT:=$(shell echo "${ADORE_CLI_BRANCH}" | sed 's|.*/||' | cut -c1-20 | sed 's/_$$//')
 PARENT_BRANCH_SHORT:=$(shell echo "${PARENT_BRANCH}" | sed 's|.*/||' | cut -c1-20 | sed 's/_$$//')
 
 # === CORE TAGGING LOGIC ===
-# Base tags using shortened branch names
-ADORE_CLI_BASE_TAG_CLEAN:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
 ADORE_CLI_BASE_TAG_CLEAN:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
 ifeq ($(ADORE_CLI_IS_DIRTY),true)
     ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}_dirty
@@ -128,24 +116,16 @@ else
     ADORE_CLI_BASE_TAG_DEFAULT:=${ADORE_CLI_BASE_TAG_CLEAN}
 endif
 
-# Core image tagging with shortened branch names
-#ifeq ($(PARENT_IS_ADORE_CLI),true)
-#    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
-#else
-#    ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_SHORT_HASH}_RH${REQUIREMENTS_HASH_SHORT}
-#endif
 ADORE_CLI_CORE_TAG_DEFAULT:=${ARCH}_RH${REQUIREMENTS_HASH_SHORT}
 
-# User image tagging with shortened branch names and username truncation if needed
+# Image tag is content-addressed only — user identity is not baked in.
+# The image is shareable across all users with the same codebase state.
 ifeq ($(PARENT_IS_ADORE_CLI),true)
-    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${USER}_UID${USER_UID}GID${USER_GID}
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}
 else
-    # Truncate username to 8 chars to keep total tag length reasonable
-    USER_SHORT:=$(shell echo "${USER}" | cut -c1-8)
-    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH_SHORT}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_HASH_SHORT}_PH${PACKAGES_SHORT_HASH}_${USER_SHORT}_UID${USER_UID}GID${USER_GID}
+    ADORE_CLI_USER_TAG_DEFAULT:=${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH_SHORT}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_HASH_SHORT}_PH${PACKAGES_SHORT_HASH}
 endif
 
-# Use default tags for runtime (simplified - no complex built tag logic)
 ADORE_CLI_BASE_TAG:=${ADORE_CLI_BASE_TAG_DEFAULT}
 ADORE_CLI_CORE_TAG:=${ADORE_CLI_CORE_TAG_DEFAULT}
 ADORE_CLI_TAG:=${ADORE_CLI_USER_TAG_DEFAULT}
@@ -153,7 +133,10 @@ ADORE_CLI_TAG:=${ADORE_CLI_USER_TAG_DEFAULT}
 ADORE_CLI_BASE_IMAGE:=adore_cli_base:${ADORE_CLI_BASE_TAG}
 ADORE_CLI_CORE_IMAGE:=adore_cli_core:${ADORE_CLI_CORE_TAG}
 ADORE_CLI_IMAGE:=adore_cli:${ADORE_CLI_TAG}
-ADORE_CLI_CONTAINER_NAME:=adore_cli_${ADORE_CLI_TAG}
+
+# Container name is user-scoped so multiple users on the same host get
+# independent containers from the shared image.
+ADORE_CLI_CONTAINER_NAME:=adore_cli_${ADORE_CLI_TAG}_$(shell whoami)
 
 ADORE_TAG ?= $(ADORE_CLI_TAG)
 
@@ -266,7 +249,6 @@ _determine_actual_build_tags:
 	@echo "Parent repo dirty: ${PARENT_IS_DIRTY}"
 	@echo "Requirements short hash: ${REQUIREMENTS_HASH_SHORT}"
 	@echo "Packages short hash: ${PACKAGES_SHORT_HASH}"
-	@echo "User: ${USER}"
 	@REQUIREMENTS_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_requirements_manifest_changed); \
 	PACKAGES_CHANGED=$$(make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _check_packages_manifest_changed); \
 	echo "Requirements manifest changed: $$REQUIREMENTS_CHANGED"; \
@@ -325,7 +307,7 @@ check_cross_compile_deps: check_docker_version
 
 # === MAIN CLI TARGET ===
 
-.PHONY: cli 
+.PHONY: cli
 cli: docker_host_context_check _cli_smart_attach ## Start ADORe CLI docker context or attach to it if it is already running
 
 .PHONY: _cli_smart_attach
@@ -369,7 +351,6 @@ _cli_smart_attach:
 .PHONY: _execute_last_successful_environment
 _execute_last_successful_environment:
 	@echo "Using last successful environment: ${LAST_TAG}"
-	@# Extract core tag from last successful user tag
 	@LAST_CORE_TAG=$$(echo "${LAST_TAG}" | sed -E 's/^(.+)_PH[a-f0-9]{7}_.*$$/\1/'); \
 	if [[ "$$LAST_CORE_TAG" == "${LAST_TAG}" ]]; then \
 		LAST_CORE_TAG=$$(echo "${LAST_TAG}" | sed -E 's/^(.+)_[^_]+_UID.*$$/\1/'); \
@@ -378,7 +359,7 @@ _execute_last_successful_environment:
 	make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action \
 		ADORE_CLI_TAG="${LAST_TAG}" \
 		ADORE_CLI_IMAGE="adore_cli:${LAST_TAG}" \
-		ADORE_CLI_CONTAINER_NAME="adore_cli_${LAST_TAG}" \
+		ADORE_CLI_CONTAINER_NAME="adore_cli_${LAST_TAG}_$(shell whoami)" \
 		ADORE_CLI_CORE_IMAGE="adore_cli_core:$$LAST_CORE_TAG"
 
 .PHONY: _execute_environment_action
@@ -392,7 +373,7 @@ _execute_environment_action:
 	    echo "Type 'exit' to detach from container (container will continue running)"; \
 	    echo "Use 'make stop' to stop the container"; \
 	    echo ""; \
-	    docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
+	    docker exec -it --user ${USER_UID}:${USER_GID} ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true; \
 	    echo ""; \
 	    echo "Detached from container. Container is still running."; \
 	    echo "Use 'make cli' to reattach or 'make stop' to stop it."; \
@@ -401,7 +382,7 @@ _execute_environment_action:
 	    echo "Starting existing container..."; \
 	    docker start ${ADORE_CLI_CONTAINER_NAME}; \
 	    echo "Attaching to restarted container..."; \
-	    docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"; \
+	    docker exec -it --user ${USER_UID}:${USER_GID} ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true; \
 	else \
 	    echo "No existing container found with name: ${ADORE_CLI_CONTAINER_NAME}"; \
 	    if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
@@ -478,25 +459,24 @@ _start_and_attach_interactive: adore_cli_setup adore_cli_start
 	@echo "Type 'exit' to detach from container (container will continue running)"
 	@echo "Use 'make cli' to reattach or 'make stop' to stop the container"
 	@echo ""
-	@docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh"
+	@docker exec -it --user ${USER_UID}:${USER_GID} ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true
 	@echo ""
 	@echo "Detached from container. Container is still running."
 	@echo "Use 'make cli' to reattach or 'make stop' to stop it."
 
 # === LIFECYCLE TARGETS ===
 .PHONY: start
-start: adore_cli_setup adore_cli_start ## Start the ADORe CLI docker compose context 
+start: adore_cli_setup adore_cli_start ## Start the ADORe CLI docker compose context
 
 .PHONY: stop
 stop: stop_adore_cli ## Stop ADORe CLI docker compose context if it is running
 
 .PHONY: run
-run: adore_cli_setup _run_non_interactive ## Execute a command in the ADORe CLI context `make run cmd="<command to execute>"` 
+run: adore_cli_setup _run_non_interactive ## Execute a command in the ADORe CLI context `make run cmd="<command to execute>"`
 
 .PHONY: _run_non_interactive
 _run_non_interactive:
 	@echo "=== ADORe CLI Non-Interactive Run ==="
-	@# For run target, always use current tags without prompting
 	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
 		echo "Required image not found: ${ADORE_CLI_IMAGE}"; \
 		echo "Building automatically for non-interactive run..."; \
@@ -522,7 +502,7 @@ _run_non_interactive:
 	fi
 
 .PHONY: adore_cli_up
-adore_cli_up: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardown 
+adore_cli_up: adore_cli_setup adore_cli_start adore_cli_attach adore_cli_teardown
 
 .PHONY: stop_adore_cli
 stop_adore_cli: docker_host_context_check adore_cli_teardown ## Stop adore_cli docker context if it is running
@@ -540,7 +520,6 @@ _build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
 	@echo "Parent dirty: ${PARENT_IS_DIRTY}"
 	@echo "Requirements hash: ${REQUIREMENTS_HASH_SHORT}"
 	@echo "Packages hash: ${PACKAGES_SHORT_HASH}"
-	@echo "User: ${USER} (UID: ${USER_UID}, GID: ${USER_GID})"
 	@echo ""
 	@echo "Build strategy:"
 	@echo "  1. Base layer:  Try registry pull → Use cache → Build locally"
@@ -601,6 +580,8 @@ _build_adore_cli_layers: check_cross_compile_deps _determine_actual_build_tags
 	@if [ -f "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" ]; then \
 		bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" save "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_TAG}" 2>/dev/null || echo "Warning: Could not save to tag history"; \
 	fi
+	@echo "Pulling Zenoh image..."
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk pull_zenoh
 	@echo ""
 	@echo "Next steps:"
 	@echo "  Start development environment: make cli"
@@ -623,7 +604,6 @@ clean_tag_history:
 	@rm -f "${SOURCE_DIRECTORY}/.log/.adore_cli/last_successful_env"
 	@rm -f "${SOURCE_DIRECTORY}/.log/.adore_cli/adore_cli_tag_history"
 
-
 # === REBUILD TARGETS ===
 
 .PHONY: rebuild_force
@@ -632,7 +612,7 @@ rebuild_force: ## Force rebuild all layers (ignore existing images and cache)
 	@echo "This will force rebuild all layers from scratch..."
 	@echo ""
 	@docker rmi ${ADORE_CLI_IMAGE} 2>/dev/null || true
-	@docker rmi ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true  
+	@docker rmi ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true
 	@docker rmi ${ADORE_CLI_BASE_IMAGE} 2>/dev/null || true
 	@rm -f "${BUILT_TAGS_FILE}"
 	@rm -f "${REQUIREMENTS_MANIFEST}" "${PACKAGES_MANIFEST}"
@@ -763,10 +743,6 @@ _build_user_layer: check_cross_compile_deps
 	        --build-arg PARENT_BRANCH=${PARENT_BRANCH} \
 	        --build-arg PARENT_SHORT_HASH=${PARENT_SHORT_HASH} \
 	        --build-arg ARCH=${ARCH} \
-	        --build-arg USER=${USER} \
-	        --build-arg UID=${USER_UID} \
-	        --build-arg GID=${USER_GID} \
-	        --build-arg HOSTNAME=${HOSTNAME} \
 	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile.adore_cli \
 	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli \
 	        --load; \
@@ -782,16 +758,12 @@ _build_user_layer: check_cross_compile_deps
 	        --build-arg PARENT_BRANCH=${PARENT_BRANCH} \
 	        --build-arg PARENT_SHORT_HASH=${PARENT_SHORT_HASH} \
 	        --build-arg ARCH=${ARCH} \
-	        --build-arg USER=${USER} \
-	        --build-arg UID=${USER_UID} \
-	        --build-arg GID=${USER_GID} \
-	        --build-arg HOSTNAME=${HOSTNAME} \
 	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile.adore_cli \
 	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli; \
 	fi
 
-.PHONY: clean_adore_cli 
-clean_adore_cli: ## Clean adore_cli docker context 
+.PHONY: clean_adore_cli
+clean_adore_cli: ## Clean adore_cli docker context
 	@rm -f "${BUILT_TAGS_FILE}"
 	cd "${ADORE_CLI_MAKEFILE_PATH}" && make clean
 
@@ -858,7 +830,7 @@ enable_x11_forwarding: check_display
 	fi
 
 .PHONY: disable_x11_forwarding
-disable_x11_forwarding: 
+disable_x11_forwarding:
 	@if command -v xhost >/dev/null 2>&1; then \
 		echo "Removing X11 access for Docker with 'xhost -local:docker'"; \
 		xhost -local:docker || true; \
@@ -867,7 +839,7 @@ disable_x11_forwarding:
 	fi
 
 .PHONY: adore_cli_setup
-adore_cli_setup: 
+adore_cli_setup:
 	@echo "Running adore_cli setup... SOURCE_DIRECTORY: ${SOURCE_DIRECTORY}"
 	@touch ${HOME}/.gitconfig
 	@mkdir -p ${ADORE_CLI_MAKEFILE_PATH}/.log/.adore_cli
@@ -875,16 +847,40 @@ adore_cli_setup:
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.bash_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history
 	@touch ${ADORE_CLI_MAKEFILE_PATH}/.zsh_history.new
-	@cd ${ADORE_CLI_MAKEFILE_PATH} &&  make enable_x11_forwarding
-
+	@printf '%s\n' \
+		"ADORE_CLI_MAKEFILE_PATH=${ADORE_CLI_MAKEFILE_PATH}" \
+		"SOURCE_DIRECTORY=${SOURCE_DIRECTORY}" \
+		"ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY}" \
+		"ADORE_CLI_IMAGE=${ADORE_CLI_IMAGE}" \
+		"ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE}" \
+		"ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME}" \
+		"ADORE_CLI_BRANCH=${ADORE_CLI_BRANCH}" \
+		"ADORE_CLI_SHORT_HASH=${ADORE_CLI_SHORT_HASH}" \
+		"PARENT_BRANCH=${PARENT_BRANCH}" \
+		"PARENT_SHORT_HASH=${PARENT_SHORT_HASH}" \
+		"ARCH=${ARCH}" \
+		"DOCKER_PLATFORM=${DOCKER_PLATFORM}" \
+		"ROS_DISTRO=${ROS_DISTRO}" \
+		"OS_CODE_NAME=${OS_CODE_NAME}" \
+		"USER=${USER}" \
+		"USER_UID=${USER_UID}" \
+		"USER_GID=${USER_GID}" \
+		"HOSTNAME=${HOSTNAME}" \
+		"DISPLAY=${DISPLAY}" \
+		> ${ADORE_CLI_MAKEFILE_PATH}/.env
+	@ZENOH_ENABLE=$$(grep '^ZENOH_ENABLE=' ${SOURCE_DIRECTORY}/adore_cli.env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "false"); \
+	ZENOH_IMAGE=$$(grep '^ZENOH_IMAGE=' ${SOURCE_DIRECTORY}/adore_cli.env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "eclipse/zenoh-bridge-ros2dds:latest"); \
+	printf 'ZENOH_ENABLE=%s\nZENOH_IMAGE=%s\n' "$$ZENOH_ENABLE" "$$ZENOH_IMAGE" >> ${ADORE_CLI_MAKEFILE_PATH}/.env
+	@cd ${ADORE_CLI_MAKEFILE_PATH} && make enable_x11_forwarding
 
 .PHONY: adore_cli_teardown
 adore_cli_teardown:
 	@echo "Running adore_cli teardown..."
-	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} down 2>/dev/null || true
-	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} rm -f 2>/dev/null || true
-	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} stop 2>/dev/null || true
-	@cd ${ADORE_CLI_MAKEFILE_PATH} &&  make disable_x11_forwarding
+	@docker stop ${ADORE_CLI_CONTAINER_NAME}_zenoh 2>/dev/null || true
+	@docker rm -f ${ADORE_CLI_CONTAINER_NAME}_zenoh 2>/dev/null || true
+	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} --profile zenoh down 2>/dev/null || true
+	@cd ${ADORE_CLI_MAKEFILE_PATH} && docker compose -f ${DOCKER_COMPOSE_FILE} --profile zenoh rm -f 2>/dev/null || true
+	@cd ${ADORE_CLI_MAKEFILE_PATH} && make disable_x11_forwarding
 
 .PHONY: adore_cli_start
 adore_cli_start:
@@ -893,7 +889,6 @@ adore_cli_start:
 	@echo "  ADORE_CLI_IMAGE: ${ADORE_CLI_IMAGE}"
 	@echo "  ADORE_CLI_CONTAINER_NAME: ${ADORE_CLI_CONTAINER_NAME}"
 	@echo "  Expected core image: ${ADORE_CLI_CORE_IMAGE}"
-	@echo ${ADORE_CLI_MAKEFILE_PATH}
 	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
 	    echo "ERROR: Required user image not found: ${ADORE_CLI_IMAGE}"; \
 	    echo "Available images with similar names:"; \
@@ -901,12 +896,28 @@ adore_cli_start:
 	    echo "Please run 'make build' first to create all required images"; \
 	    exit 1; \
 	fi
-	cd ${ADORE_CLI_MAKEFILE_PATH} && \
-	docker compose  -f ${DOCKER_COMPOSE_FILE} up \
-	    --no-build \
-	    --force-recreate \
-	    --renew-anon-volumes \
-	    --detach
+	@docker rm -f ${ADORE_CLI_CONTAINER_NAME} 2>/dev/null || true
+	@ZENOH_ENABLE=$$(grep '^ZENOH_ENABLE=' ${SOURCE_DIRECTORY}/adore_cli.env 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'" | xargs || echo "false"); \
+	if [ "$$ZENOH_ENABLE" = "true" ]; then \
+	    echo "Zenoh bridge enabled"; \
+	    ZENOH_IMAGE=$$(grep '^ZENOH_IMAGE=' ${SOURCE_DIRECTORY}/adore_cli.env 2>/dev/null | cut -d= -f2 | tr -d '"' | xargs || echo "eclipse/zenoh-bridge-ros2dds:latest"); \
+	    echo "Pulling Zenoh image: $$ZENOH_IMAGE"; \
+	    docker pull "$$ZENOH_IMAGE" || true; \
+	    cd ${ADORE_CLI_MAKEFILE_PATH} && \
+	    docker compose -f ${DOCKER_COMPOSE_FILE} --profile zenoh up \
+	        --no-build \
+	        --force-recreate \
+	        --renew-anon-volumes \
+	        --detach; \
+	else \
+	    echo "Zenoh bridge disabled"; \
+	    cd ${ADORE_CLI_MAKEFILE_PATH} && \
+	    docker compose -f ${DOCKER_COMPOSE_FILE} up \
+	        --no-build \
+	        --force-recreate \
+	        --renew-anon-volumes \
+	        --detach; \
+	fi
 
 .PHONY: adore_cli_run
 adore_cli_run: ## Execute command in the ADORe CLI context. Usage: make adore_cli_run cmd="<your_command>"
@@ -920,7 +931,8 @@ adore_cli_run: ## Execute command in the ADORe CLI context. Usage: make adore_cl
 	    make adore_cli_start; \
 	fi
 	@echo "Executing command in container ${ADORE_CLI_CONTAINER_NAME}: $(cmd)"
-	docker exec --workdir /tmp/adore ${ADORE_CLI_CONTAINER_NAME} env DOCKER_EXEC_NON_INTERACTIVE=1 zsh -c "source ~/.zshrc && $(cmd)"; \
+	docker exec --workdir /tmp/adore --user ${USER_UID}:${USER_GID} ${ADORE_CLI_CONTAINER_NAME} \
+	    env DOCKER_EXEC_NON_INTERACTIVE=1 zsh -c "source ~/.zshrc && $(cmd)"
 
 .PHONY: test_ros2_installation
 test_ros2_installation:
@@ -928,16 +940,16 @@ test_ros2_installation:
 
 .PHONY: adore_cli_start_headless
 adore_cli_start_headless: adore_cli_setup
-	export DISPLAY_MODE=headless && make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_start 
+	export DISPLAY_MODE=headless && make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_start
 
 .PHONY: adore_cli_attach
 adore_cli_attach:
 	@echo "Running adore_cli attach..."
-	@docker exec -it ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true
+	@docker exec -it --user ${USER_UID}:${USER_GID} ${ADORE_CLI_CONTAINER_NAME} /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true
 
 # === INFO TARGETS ===
 .PHONY: branch_adore_cli
-branch_adore_cli: ## Returns the current docker safe/sanitized branch for adore_cli 
+branch_adore_cli: ## Returns the current docker safe/sanitized branch for adore_cli
 	@printf "%s\n" ${ADORE_CLI_TAG}
 
 .PHONY: image_adore_cli
@@ -1176,8 +1188,14 @@ _try_pull_core:
 
 # === HELP TARGETS ===
 
+.PHONY: pull_zenoh
+pull_zenoh: ## Pull the Zenoh bridge image defined in adore_cli.env
+	@ZENOH_IMAGE=$$(grep '^ZENOH_IMAGE=' ${SOURCE_DIRECTORY}/adore_cli.env 2>/dev/null | cut -d= -f2 | tr -d '"' | xargs || echo "eclipse/zenoh-bridge-ros2dds:latest"); \
+	echo "Pulling Zenoh image: $$ZENOH_IMAGE"; \
+	docker pull "$$ZENOH_IMAGE"
+
 .PHONY: help_cli
-help_cli: ## Show ADORe CLI help 
+help_cli: ## Show ADORe CLI help
 	@echo "=== ADORe CLI Help ==="
 	@echo ""
 	@echo "ADORe CLI uses a three-layer Docker architecture for efficient builds:"
@@ -1191,7 +1209,7 @@ help_cli: ## Show ADORe CLI help
 	@echo "Build strategy:"
 	@echo "  1. Base layer:  OS + ROS2 foundation (highly cacheable)"
 	@echo "  2. Core layer:  Complete environment + dependencies (shareable)"
-	@echo "  3. User layer:  User customization + packages (user-specific)"
+	@echo "  3. User layer:  .deb packages (shareable, user created at runtime)"
 	@echo ""
 	@echo "=== Main User Targets ==="
 	@echo "  build              Build complete ADORe CLI environment (recommended first step)"

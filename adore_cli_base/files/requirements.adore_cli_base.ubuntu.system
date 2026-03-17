@@ -19,6 +19,15 @@
 #   environment variable values. Requires ROS_DISTRO to be set before use.
 # =============================================================================
 
+## Network debugging tools
+telnet
+netcat-traditional
+traceroute
+nmap
+inetutils-ping
+
+
+
 # System utilities and shell environment
 rsyslog
 sudo
@@ -31,11 +40,20 @@ curl
 wget
 less
 gettext
+curl
+wget
+htop
+cowsay
+gdb
+gdbserver
+clang-format
 
 # Development and build tools
 ccache
 cmake
 ros-dev-tools
+fzf
+vim
 
 # Python development environment
 python3-venv
@@ -60,7 +78,12 @@ ros-${ROS_DISTRO}-tracetools-trace
 
 # Platform-specific dependencies
 libhdf5-dev
+
+# PPA support
 software-properties-common
+
+# Zenoh ROS2 middleware
+ros-${ROS_DISTRO}-rmw-zenoh-cpp
 
 # Disabled packages
 #python3-rospy

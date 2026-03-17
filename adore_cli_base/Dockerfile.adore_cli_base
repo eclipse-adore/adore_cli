@@ -77,6 +77,10 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     xargs -r apt-get install --no-install-recommends -y \
         -o Acquire::Check-Valid-Until=false
 
+RUN echo "deb [trusted=yes] https://download.eclipse.org/zenoh/debian-repo/ /" \
+        > /etc/apt/sources.list.d/zenoh.list && \
+    apt-get update
+
 # === SYSTEM CONFIGURATION ===
 # Configure system services and directories
 # Create standard directories
