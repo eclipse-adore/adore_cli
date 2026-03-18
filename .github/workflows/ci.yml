@@ -44,6 +44,11 @@ jobs:
       - name: Build
         run: make build
 
+      - name: Pull optional runtime images
+        run: |
+          source adore_cli.env 2>/dev/null || true
+          [ -n "${ZENOH_IMAGE:-}" ] && docker pull "$ZENOH_IMAGE" || true
+
       - name: Test
         run: bash .ci test
 
