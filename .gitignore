@@ -9,6 +9,10 @@
 
 # === Build cache ===
 .ccache/
+ros2_workspace/install/
+ros2_workspace/log/
+
+
 
 # === Build/CI output ===
 build/
