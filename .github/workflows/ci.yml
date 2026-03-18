@@ -42,10 +42,10 @@ jobs:
           echo "GITHUB_ACTIONS=true" >> $GITHUB_ENV
 
       - name: Build
-        run: make build && make save
+        run: make build
 
       - name: Test
-        run: make test
+        run: bash .ci test
 
       - name: Push images
         if: github.event_name == 'push'
