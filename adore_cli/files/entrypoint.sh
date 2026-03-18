@@ -112,6 +112,7 @@ else
     ACTIVE_DISPLAY=":99"
 fi
 export DISPLAY="${ACTIVE_DISPLAY}"
+echo "export DISPLAY=${ACTIVE_DISPLAY}" > /tmp/.adore_display
 
 # === RSYSLOG SETUP ===
 export RSYSLOG_PROTOCOL="${RSYSLOG_PROTOCOL:-udp}"
