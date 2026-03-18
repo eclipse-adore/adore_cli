@@ -86,7 +86,6 @@ detect_display() {
 }
 
 if detect_display; then
-    # Physical display — use the DISPLAY passed in from the host, fall back to :0
     ACTIVE_DISPLAY="${DISPLAY:-:0}"
 else
     echo "Starting virtual display on :99..."
@@ -97,8 +96,6 @@ else
     ACTIVE_DISPLAY=":99"
 fi
 export DISPLAY="${ACTIVE_DISPLAY}"
-# Write to /etc/zshenv so every zsh session (including non-interactive docker exec) inherits DISPLAY
-echo "export DISPLAY=${ACTIVE_DISPLAY}" >> /etc/zshenv
 
 # === RSYSLOG SETUP ===
 export RSYSLOG_PROTOCOL="${RSYSLOG_PROTOCOL:-udp}"

@@ -187,8 +187,8 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
         exit 1
     fi
     
-    # Launch test GUI application detached from the exec session
-    if ! make run cmd="setsid xeyes >/dev/null 2>&1 &" >/dev/null 2>&1; then
+    # Launch test GUI application in background
+    if ! make run cmd="xeyes &" >/dev/null 2>&1; then
         status=$(bold $(red "FAILED"))
         message="        Failed to launch test GUI application."
         printf "    Message:\n%s\n" "$message"
