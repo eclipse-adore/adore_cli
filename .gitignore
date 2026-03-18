@@ -13,3 +13,4 @@ adore_cli/packages_manifest.txt
 .env
 adore_cli/context
 .zsh_history
+.zshrc
