@@ -50,7 +50,7 @@ jobs:
           [ -n "${ZENOH_IMAGE:-}" ] && docker pull "$ZENOH_IMAGE" || true
 
       - name: Test
-        run: bash .ci test
+        run: make save && bash .ci test
 
       - name: Push images
         if: github.event_name == 'push'
