@@ -13,8 +13,7 @@ export ZSH_COMPDUMP="${HOME}/.zcompdump"
 skip_global_compinit=1
 
 # === OPTIMIZED HISTORY CONFIGURATION ===
-setopt INC_APPEND_HISTORY 2>/dev/null
-setopt SHARE_HISTORY 2>/dev/null  
+setopt APPEND_HISTORY 2>/dev/null
 setopt EXTENDED_HISTORY 2>/dev/null
 export HISTFILESIZE=50000
 export HISTSIZE=10000
@@ -43,6 +42,15 @@ if [ -n "$ZSH" ] && [ -f "$ZSH/oh-my-zsh.sh" ]; then
 else
     OMZ_LOADED=false
 fi
+
+# oh-my-zsh lib/history.zsh forces SHARE_HISTORY which causes the
+# .zsh_history.new rename to fail when HISTFILE is not set in the
+# docker exec environment. Override it unconditionally.
+unsetopt SHARE_HISTORY 2>/dev/null
+unsetopt INC_APPEND_HISTORY 2>/dev/null
+unsetopt INC_APPEND_HISTORY_TIME 2>/dev/null
+setopt APPEND_HISTORY 2>/dev/null
+
 
 # === PROMPT ===
 autoload -U colors && colors
@@ -102,3 +110,10 @@ if [[ -z "$ADORE_SETUP_SOURCED" ]] && [ -f /tmp/adore/setup.sh ]; then
     source /tmp/adore/setup.sh 2>/dev/null
     export ADORE_SETUP_SOURCED=1
 fi
+
+# === HISTORY - forced last, overrides everything including oh-my-zsh and setup.sh ===
+HISTFILE="${HISTFILE:-/tmp/adore_cli/.zsh_history}"
+unsetopt SHARE_HISTORY       2>/dev/null
+unsetopt INC_APPEND_HISTORY  2>/dev/null
+unsetopt INC_APPEND_HISTORY_TIME 2>/dev/null
+setopt   APPEND_HISTORY      2>/dev/null

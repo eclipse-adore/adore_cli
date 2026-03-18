@@ -53,17 +53,17 @@ check_requirements_changes() {
     # Get container requirements hash from CORE image tag
     container_requirements_hash=""
     
-    if [ -n "${ADORE_CLI_CORE_IMAGE}" ]; then
-        container_requirements_hash=$(echo "${ADORE_CLI_CORE_IMAGE}" | grep -o 'RH[a-f0-9]\{7\}' | cut -c3-)
+    if [ -n "${ADORE_CLI_IMAGE}" ]; then
+        container_requirements_hash=$(echo "${ADORE_CLI_IMAGE}" | grep -o 'RH[a-f0-9]\{7\}' | cut -c3-)
     fi
     
     # If no hash in core image tag, check built tags file
     if [ -z "$container_requirements_hash" ] && [ -n "${SOURCE_DIRECTORY}" ]; then
         built_tags_file="${SOURCE_DIRECTORY}/.log/.adore_cli/built_tags"
         if [ -f "$built_tags_file" ]; then
-            core_tag=$(grep "^CORE=" "$built_tags_file" 2>/dev/null | cut -d'=' -f2)
-            if [ -n "$core_tag" ]; then
-                container_requirements_hash=$(echo "$core_tag" | grep -o 'RH[a-f0-9]\{7\}' | cut -c3-)
+            user_tag=$(grep "^USER=" "$built_tags_file" 2>/dev/null | cut -d'=' -f2)
+            if [ -n "$user_tag" ]; then
+                container_requirements_hash=$(echo "$user_tag" | grep -o 'RH[a-f0-9]\{7\}' | cut -c3-)
             fi
         fi
     fi
@@ -78,7 +78,7 @@ check_requirements_changes() {
     if [ -z "$container_requirements_hash" ]; then
         printf "    ${ORANGE}INFO:${RESET} Unable to determine container requirements hash\n"
         printf "    Current calculated requirements hash: ${current_requirements_hash}\n"
-        printf "    Core image: ${ADORE_CLI_CORE_IMAGE:-NOT_SET}\n"
+        printf "    User image: ${ADORE_CLI_IMAGE:-NOT_SET}\n"
         return 0
     fi
     

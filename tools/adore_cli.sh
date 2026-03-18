@@ -57,4 +57,8 @@ bash "/tmp/adore_cli/tools/check_vendor_dependencies.sh"
 
 printf "\n"
 
+# HISTFILE lives inside the directory-mounted /tmp/adore_cli so that zsh's
+# atomic rename(.zsh_history.new -> .zsh_history) succeeds on exit.
+# A file bind-mount at $HOME/.zsh_history would block that rename syscall.
+export HISTFILE="/tmp/adore_cli/.zsh_history"
 exec zsh -l

@@ -1,0 +1,54 @@
+# Dev environment built on top of adore_cli_core.
+# Shell, build tools, x11, tracing, diagnostics.
+
+# Shell / system
+zsh
+sudo
+vim
+git
+curl
+wget
+less
+htop
+fzf
+cowsay
+rsyslog
+gettext
+apt-file
+software-properties-common
+file
+
+# Build tools
+ccache
+cmake
+ros-dev-tools
+python3-venv
+python3-pip
+python3-colcon-common-extensions
+
+# Debug
+gdb
+gdbserver
+clang-format
+
+# Network diagnostics
+telnet
+netcat-traditional
+traceroute
+nmap
+inetutils-ping
+
+# X11 / virtual display
+x11-apps
+xterm
+x11-utils
+x11-xserver-utils
+xvfb
+
+# ROS2 tracing
+ros-${ROS_DISTRO}-tracetools
+ros-${ROS_DISTRO}-tracetools-analysis
+ros-${ROS_DISTRO}-tracetools-launch
+ros-${ROS_DISTRO}-tracetools-read
+ros-${ROS_DISTRO}-tracetools-test
+ros-${ROS_DISTRO}-tracetools-trace

@@ -1,62 +1,63 @@
-ARG ADORE_CLI_CORE_IMAGE=adore_cli_core:latest
-FROM ${ADORE_CLI_CORE_IMAGE} AS adore_cli
+ARG ADORE_CLI_BASE_IMAGE=adore_cli_base:latest
+FROM ${ADORE_CLI_BASE_IMAGE}
 
 ARG ROS_DISTRO=jazzy
-ARG OS_CODE_NAME=noble
-ARG BRANCH=main
-ARG SHORT_HASH=latest
-ARG PARENT_BRANCH=main
-ARG PARENT_SHORT_HASH=latest
-ARG ARCH=x86_64
+ARG ARCH
+ARG BRANCH
+ARG SHORT_HASH
+ARG PARENT_BRANCH
+ARG PARENT_SHORT_HASH
 
-COPY packages/. /tmp/packages/
-COPY packages_manifest.txt /tmp/packages_manifest.txt
-WORKDIR /tmp
+LABEL org.adore.image-type="user" \
+      org.adore.arch="${ARCH}" \
+      org.adore.branch="${BRANCH}" \
+      org.adore.commit="${SHORT_HASH}" \
+      org.adore.parent-branch="${PARENT_BRANCH}" \
+      org.adore.parent-commit="${PARENT_SHORT_HASH}"
 
-RUN mkdir -p /tmp/.tmp/packages
+COPY context/requirements.ppa    /tmp/build/
+COPY context/requirements.system /tmp/build/
+COPY context/requirements.pip3   /tmp/build/
+COPY context/vendor/             /tmp/build/vendor/
 
-RUN echo "=== Installing .deb packages ===" && \
-    cd /tmp/packages && \
-    echo "Package manifest contents:" && \
-    cat /tmp/packages_manifest.txt && \
-    echo "Available .deb files:" && \
-    find . -maxdepth 1 -type f -name "*.deb" -exec basename {} \; | sort && \
-    DEB_COUNT=$(find . -maxdepth 1 -type f -name "*.deb" | wc -l) && \
-    echo "Found $DEB_COUNT .deb packages to install" && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    if [ -s /tmp/build/requirements.ppa ]; then \
+        apt-get install -y --no-install-recommends software-properties-common && \
+        grep -v '^\s*#' /tmp/build/requirements.ppa | grep -v '^\s*$' | \
+        while read -r ppa; do \
+            add-apt-repository -y "$ppa"; \
+        done; \
+    fi && \
+    apt-get update && \
+    if [ -s /tmp/build/requirements.system ]; then \
+        grep -v '^\s*#' /tmp/build/requirements.system | grep -v '^\s*$' | \
+        envsubst | xargs -r apt-get install -y --no-install-recommends \
+; \
+    fi && \
+    DEB_COUNT=$(find /tmp/build/vendor -maxdepth 1 -name '*.deb' | wc -l) && \
     if [ "$DEB_COUNT" -gt 0 ]; then \
-        echo "Installing packages..." && \
-        find . -maxdepth 1 -type f -name "*.deb" -print0 | \
-        xargs -0 -r dpkg -i --force-all && \
-        echo "Fixing any broken dependencies..." && \
-        apt-get update && \
-        apt-get install -f -y --no-install-recommends && \
-        echo "Package installation completed" && \
-        cp /tmp/packages_manifest.txt /tmp/.tmp/packages/ && \
-        echo "success" > /tmp/.tmp/packages/build_success.marker; \
-    else \
-        echo "No .deb packages found to install" && \
-        echo "no_packages" > /tmp/.tmp/packages/build_success.marker; \
+        find /tmp/build/vendor -maxdepth 1 -name '*.deb' -print0 | \
+            xargs -0 dpkg -i --force-all && \
+        apt-get install -f -y --no-install-recommends \
+; \
     fi
 
-RUN userdel --remove ubuntu 2>/dev/null || true && \
-    rm -rf /home/ubuntu 2>/dev/null || true
+RUN python3 -m venv /opt/adore_venv --system-site-packages && \
+    if [ -s /tmp/build/requirements.pip3 ]; then \
+        grep -v '^\s*#' /tmp/build/requirements.pip3 | grep -v '^\s*$' | \
+        xargs -r /opt/adore_venv/bin/pip install --upgrade; \
+    fi
 
-# Static groups created at build time; the user account is created at runtime
-# by the entrypoint from the USER/UID/GID environment variables.
-RUN (getent group tracing || groupadd -r tracing) && \
-    (getent group syslog  || groupadd -r syslog)
+ENV PATH="/opt/adore_venv/bin:${PATH}"
+ENV VIRTUAL_ENV="/opt/adore_venv"
 
-RUN mkdir -p /var/log/ros2/rsyslog /var/lib/rsyslog /var/log/syslog /var/spool/rsyslog && \
-    chmod -R 777 /var/log/ros2 /var/lib/rsyslog /var/spool/rsyslog && \
-    chown syslog:syslog /var/log/syslog
+RUN userdel --remove ubuntu 2>/dev/null || true
 
 COPY files/rsyslog.conf.template /etc/rsyslog.conf.template
-
-WORKDIR /tmp/adore
-
-COPY files/entrypoint.sh /entrypoint.sh
+COPY files/entrypoint.sh         /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Container starts as root so the entrypoint can create the runtime user.
-# Interactive shells attach via: docker exec --user <uid>:<gid>
+WORKDIR /tmp/adore
 ENTRYPOINT ["/entrypoint.sh"]

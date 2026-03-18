@@ -39,8 +39,10 @@ fi
 HOME_DIR=$(getent passwd "$TARGET_UID" | cut -d: -f6)
 HOME_DIR="${HOME_DIR:-/home/$TARGET_USER}"
 mkdir -p "$HOME_DIR"
-[ ! -f "$HOME_DIR/.zshrc" ] && cp /etc/skel/.zshrc "$HOME_DIR/" 2>/dev/null || true
 chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/dev/null || true
+cp /etc/skel/.zshrc "$HOME_DIR/.zshrc" 2>/dev/null || true
+chown "$TARGET_UID:$TARGET_GID" "$HOME_DIR/.zshrc" 2>/dev/null || true
+
 
 usermod -aG tracing "$TARGET_USER" 2>/dev/null || true
 usermod -aG syslog  "$TARGET_USER" 2>/dev/null || true
@@ -137,6 +139,13 @@ trap shutdown TERM INT
 
 echo "ADORe CLI ready"
 [ -n "$XVFB_PID" ] && echo "Virtual display PID: $XVFB_PID"
+
+# Activate adore venv for all processes in this container
+if [ -f /opt/adore_venv/bin/activate ]; then
+    source /opt/adore_venv/bin/activate
+    export VIRTUAL_ENV=/opt/adore_venv
+    export PATH="/opt/adore_venv/bin:$PATH"
+fi
 
 # Keep container alive. Interactive sessions attach via:
 #   docker exec --user <uid>:<gid> -it <container> /bin/zsh

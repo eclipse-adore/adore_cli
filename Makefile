@@ -1,89 +1,62 @@
-# === SUPPRESS WARNINGS ===
 MAKEFLAGS += --no-print-directory
 .NOTPARALLEL:
 
-# === SHELL AND EXPORT CONFIGURATION ===
-SHELL:=/bin/bash
+SHELL := /bin/bash
 .EXPORT_ALL_VARIABLES:
 
-# === PROJECT DIRECTORIES ===
-ROOT_DIR:=$(shell dirname "$(realpath $(firstword $(MAKEFILE_LIST)))")
-ADORE_CLI_WORKING_DIRECTORY:=${SOURCE_DIRECTORY}
+ROOT_DIR                  := $(shell dirname "$(realpath $(firstword $(MAKEFILE_LIST)))")
+ADORE_CLI_WORKING_DIRECTORY := ${SOURCE_DIRECTORY}
 
+DOCKER_BUILDKIT ?= 1
+ROS_DISTRO      := jazzy
+OS_CODE_NAME    := noble
 
-# === DOCKER CONFIGURATION ===
-DOCKER_BUILDKIT?=1
-COMPOSE_BAKE?=true
+USER_UID := $(shell id -u)
+USER_GID := $(shell id -g)
+UID      := ${USER_UID}
+GID      := ${USER_GID}
 
-# === ROS CONFIGURATION ===
-ROS_DISTRO:=jazzy
-OS_CODE_NAME:=noble
-
-USER_UID:=$(shell id -u)
-USER_GID:=$(shell id -g)
-UID:=${USER_UID}
-GID:=${USER_GID}
-
-# === INCLUDES ===
 include ${ROOT_DIR}/adore_cli.mk
 include ${ROOT_DIR}/package.mk
 -include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 
-# === BUILD TARGETS ===
-
 .PHONY: build
-build: clean _build_adore_cli_layers ## Complete build process for ADORe CLI environment
-
-# === DEBUG AND DEVELOPMENT TARGETS ===
+build: clean build_adore_cli ## Build all ADORe CLI layers
 
 .PHONY: debug_run
 debug_run:
-	@echo "Starting debug session with user image: ${ADORE_CLI_IMAGE}"
 	docker run -it --rm --entrypoint /bin/bash ${ADORE_CLI_IMAGE}
 
 .PHONY: debug_run_root
 debug_run_root:
-	@echo "Starting root debug session with user image: ${ADORE_CLI_IMAGE}"
 	docker run -it --rm --user root --entrypoint /bin/bash ${ADORE_CLI_IMAGE}
-
 
 .PHONY: save
 save: save_docker_images ## Save all ADORe Docker images to disk in .docker_cache
 
-# === CLEANUP TARGETS ===
-
-
 .PHONY: clean_all
-clean_all: ## Clean ALL adore cli images regardless of tag
+clean_all: ## Remove all adore_cli* Docker images regardless of tag
 	@echo "Cleaning all ADORe CLI Docker images..."
-	@docker images "adore_cli*" -q | xargs -r docker rmi -f
+	@docker images "adore_cli*" -q | xargs -r docker rmi -f 2>/dev/null || true
 
 .PHONY: clean
-clean: clean_all
-	@echo "Cleaning build artifacts and Docker images..."
-	make stop || true
+clean: clean_all ## Remove images and all build artifacts
+	@echo "Cleaning build artifacts..."
+	@make stop || true
 	@rm -rf build
-	@rm -rf adore_cli/.tmp
-	@rm -rf adore_cli/packages
-	@rm -rf adore_cli/packages_manifest.txt
-	@rm -rf adore_cli_core/.log
-	@rm -rf ros2_workspace/build
-	@rm -rf ros2_workspace/install
-	@rm -rf ros2_workspace/log
+	@rm -rf adore_cli/.tmp adore_cli/packages adore_cli/packages_manifest.txt adore_cli/context
+	@rm -rf adore_cli_core/.log adore_cli_core/.tmp
+	@rm -rf adore_cli_base/.tmp
+	@rm -rf ros2_workspace/build ros2_workspace/install ros2_workspace/log
 	@rm -rf "${ADORE_CLI_LOG_DIRECTORY}"
 	@rm -rf "${ADORE_CLI_MAKEFILE_PATH}/.log/.adore_cli"
-	cd adore_cli_core && make clean
-	cd adore_cli && make clean
-
-	@echo "Removing ADORe CLI images..."
-	@docker rmi $$(docker images -q ${ADORE_CLI_BASE_IMAGE}) --force 2> /dev/null || true
-	@docker rmi $$(docker images -q ${ADORE_CLI_CORE_IMAGE}) --force 2> /dev/null || true
-	@docker rmi $$(docker images -q ${ADORE_CLI_IMAGE}) --force 2> /dev/null || true
-	@echo "Removing dangling images..."
-	@docker rmi $$(docker images --filter "dangling=true" -q) --force > /dev/null 2>&1 || true
-
-
-# === TEST TARGETS ===
+	@cd adore_cli_core && make clean
+	@cd adore_cli_base && make clean
+	@cd adore_cli      && make clean
+	@docker rmi $$(docker images -q ${ADORE_CLI_CORE_IMAGE}) --force 2>/dev/null || true
+	@docker rmi $$(docker images -q ${ADORE_CLI_BASE_IMAGE}) --force 2>/dev/null || true
+	@docker rmi $$(docker images -q ${ADORE_CLI_IMAGE})      --force 2>/dev/null || true
+	@docker rmi $$(docker images --filter "dangling=true" -q) --force 2>/dev/null || true
 
 .PHONY: logs
 logs:

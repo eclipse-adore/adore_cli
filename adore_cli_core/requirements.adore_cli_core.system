@@ -1,33 +1,6 @@
-## Core environment APT/system packages for the ADORe CLI
-
-# Add any necessary APT dependencies, one dependency per line, here and invoke 
-# `make build` to rebuild the ADORe CLI docker context to make the changes take
-# effect.
-
+# Bare minimum ROS2 runtime + communication layer.
 ros-${ROS_DISTRO}-ros-base
-ros-${ROS_DISTRO}-foxglove-bridge
-
-## Package dependencies 
-#
-## ros-foxglove-bridge package dependencies 
-#libresource-retriever-dev
-#libboost1.74-all-dev
-#nlohmann-json3-dev
-
-# Development Tools
-
-## Plotting
 ros-${ROS_DISTRO}-rosbridge-suite
-
-#Tracing tools
-ros-${ROS_DISTRO}-tracetools
-ros-${ROS_DISTRO}-tracetools-acceleration
-ros-${ROS_DISTRO}-tracetools-acceleration-dbgsym
-ros-${ROS_DISTRO}-tracetools-analysis
-ros-${ROS_DISTRO}-tracetools-dbgsym
-ros-${ROS_DISTRO}-tracetools-image-pipeline
-ros-${ROS_DISTRO}-tracetools-image-pipeline-dbgsym
-ros-${ROS_DISTRO}-tracetools-launch
-ros-${ROS_DISTRO}-tracetools-read
-ros-${ROS_DISTRO}-tracetools-test
-ros-${ROS_DISTRO}-tracetools-trace
+ros-${ROS_DISTRO}-foxglove-bridge
+ros-${ROS_DISTRO}-rmw-fastrtps-cpp
+ros-${ROS_DISTRO}-rmw-zenoh-cpp

@@ -1,346 +1,110 @@
-# ADORe CLI - Advanced Development Environment
+# ADORe CLI
 
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![ROS2](https://img.shields.io/badge/ros2-jazzy-blue?style=for-the-badge&logo=ros&logoColor=white)](https://docs.ros.org/en/jazzy/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 
-A sophisticated, multi-layer Docker-based development environment for ROS2 
-projects with intelligent caching, automated dependency management, 
-and seamless developer experience.
+A three-layer Docker development environment for ROS2 projects with automatic
+dependency gathering, content-addressed image caching, and runtime user creation.
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
-# Clone and setup
 git clone <your-repo>
 cd <your-repo>
 git submodule update --init --recursive
-
-# Build the complete environment
 make build
-
-# Start developing
 make cli
 ```
 
-## ✨ Key Features
-
-### 🏗️ Three-Layer Architecture
-- **Base Foundation**: Ubuntu 24.04 + ROS2 Jazzy core (highly cacheable, user-agnostic)
-- **Core Environment**: Complete toolchain + all discovered dependencies (shareable across users)  
-- **User Layer**: Personal customization + .deb packages + user account (user-specific)
-
-### 🎯 Smart Build System
-- **Intelligent Caching**: Only rebuilds changed layers using SHA256 fingerprinting
-- **Requirements Discovery**: Automatically finds and installs from `.system`, `.pip3`, `.ppa` files
-- **Package Management**: Installs custom `.deb` packages from `vendor/` directory
-- **Cross-Platform**: Native ARM64 and x86_64 support with cross-compilation
-- **Registry Integration**: Pull/push layer caching for CI/CD optimization
-
-### 🛠️ Developer Experience
-- **Interactive CLI**: Seamless container attach/detach with persistent state
-- **Hot Reloading**: Live code mounting for immediate development feedback
-- **Shell Integration**: zsh with oh-my-zsh and custom ADORe CLI prompt
-- **History Persistence**: Command history preserved across sessions
-- **Change Detection**: Automatically detects requirement and package changes
-
-## 🏛️ Architecture
+## Layer Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    ADORe CLI Architecture                    │
-├─────────────────────────────────────────────────────────────┤
-│  User Layer (adore_cli:tag)                                 │
-│  ├─ User account & shell environment                        │
-│  ├─ .deb packages from vendor/                              │
-│  ├─ Personal development tools                              │
-│  └─ Final development-ready image                           │
-├─────────────────────────────────────────────────────────────┤
-│  Core Environment (adore_cli_core:tag)                      │
-│  ├─ All project requirements (.system, .pip3, .ppa)        │
-│  ├─ ROS2 complete toolchain and build tools                 │
-│  ├─ Development libraries and dependencies                  │
-│  └─ User-agnostic shareable environment                     │
-├─────────────────────────────────────────────────────────────┤
-│  Base Foundation (adore_cli_base:tag)                       │
-│  ├─ Ubuntu 24.04 Noble + ROS2 Jazzy foundation             │
-│  ├─ System fundamentals and container runtime              │
-│  ├─ Oh-my-zsh and shell configuration                       │
-│  └─ Highly cacheable, globally shareable                    │
-└─────────────────────────────────────────────────────────────┘
+ros:jazzy-ros-core-noble
+  └── adore_cli_core   — bare ROS2 + rosbridge + zenoh DDS
+        └── adore_cli_base   — dev tools, x11, tracing, zsh, ccache
+              └── adore_cli  — application .debs + gathered requirements, runtime user
 ```
 
-## 📋 Prerequisites
+| Layer | Image | Tag contains |
+|---|---|---|
+| `adore_cli_core` | `adore_cli_core:<arch>_<hash>` | arch + adore_cli commit |
+| `adore_cli_base` | `adore_cli_base:<arch>_<hash>` | arch + adore_cli commit |
+| `adore_cli` | `adore_cli:<arch>_<branch>_<hash>_RH<req_hash>_PH<pkg_hash>` | full state including gathered dependencies |
 
-- **Docker**: 28.0+ with BuildKit support
-- **OS**: Linux (Ubuntu 20.04+ recommended)
-- **Memory**: 8GB+ RAM, 20GB+ free disk space
-- **Make**: GNU Make for build orchestration
-- **Git**: For submodule management
+`adore_cli_core` and `adore_cli_base` are static — they only rebuild when the
+adore_cli repo itself changes. `adore_cli` is dynamic — it rebuilds whenever
+your project's requirement files or vendor packages change.
+
+## Prerequisites
+
+- Docker 28.0+ with BuildKit
+- GNU Make
+- Linux (Ubuntu 22.04+)
+
+## Essential Commands
+
+| Command | Description |
+|---|---|
+| `make build` | Build all three layers |
+| `make cli` | Start or attach to the development environment |
+| `make run cmd="<command>"` | Execute a one-off command in the container |
+| `make stop` | Stop the running container |
+| `make clean` | Remove all images and build artifacts |
+| `make rebuild_force` | Force rebuild all layers from scratch |
+| `make rebuild_from_layer LAYER=core\|base\|user` | Rebuild from a specific layer down |
+| `make build_status` | Show which images exist locally |
+| `make adore_cli_info` | Show full configuration |
+| `make help_cli` | Show all available targets |
+
+## Dependency Management
+
+The `adore_cli` user layer automatically gathers dependencies from your project
+before each build. Place requirement files anywhere under your project — they
+are discovered recursively.
+
+| File extension | Purpose |
+|---|---|
+| `*.system` | APT packages |
+| `*.pip3` | Python packages |
+| `*.ppa` | Ubuntu PPAs |
+
+Place compiled `.deb` packages in `vendor/build/` for automatic installation.
+
+The `RH` (requirements hash) and `PH` (packages hash) in the image tag reflect
+the exact state of all gathered dependencies. A change to any requirement file
+or vendor package produces a new image tag and triggers a rebuild.
+
+## Runtime User
+
+The container starts as root. The entrypoint creates a user matching the host
+`UID`/`GID` passed via environment variables at startup, so all files written
+to mounted volumes are owned by your host user. Interactive sessions attach via:
 
 ```bash
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-
-# Install Make
-sudo apt update && sudo apt install make git
-
-# Logout and login to apply Docker group membership
+docker exec --user <uid>:<gid> -it <container> /bin/zsh
 ```
 
-## 🎯 Usage
+This is handled automatically by `make cli`.
 
-### Essential Commands
-
-| Command | Description | Use Case |
-|---------|-------------|----------|
-| `make build` | Build complete three-layer environment | First setup, major changes |
-| `make cli` | Start/attach to development environment | Daily development |
-| `make run cmd="<command>"` | Execute command in container | Running tests, builds |
-| `make stop` | Stop running container | End development session |
-| `make clean` | Remove all images and artifacts | Complete reset |
-
-### Daily Development Workflow
+## Troubleshooting
 
 ```bash
-# Start development session
-make cli
+# Stale Docker BuildKit cache (GPG errors, random package failures)
+docker builder prune -f
+make rebuild_from_layer LAYER=core
 
-# Inside container - your code is mounted at /tmp/adore
-cd /tmp/adore
+# Rebuild only what changed
+make rebuild_from_layer LAYER=user   # vendor .deb changes
+make rebuild_from_layer LAYER=core   # core ROS packages changed
 
-# Build your ROS2 packages
-colcon build
-
-# Run your code
-ros2 launch my_package my_launch.py
-
-# Exit (container keeps running)
-exit
-
-# Reattach to same session
-make cli
-
-# Stop when done
-make stop
-```
-
-## 🔨 Requirements Management
-
-ADORe CLI automatically discovers and installs dependencies from your project:
-
-### File Types Supported
-- **`requirements.system`** or **`*.system`**: APT package requirements
-- **`requirements.pip3`** or **`*.pip3`**: Python package requirements  
-- **`requirements.ppa`** or **`*.ppa`**: Ubuntu PPA repositories
-
-### Example Files
-
-**requirements.system**:
-```
-ros-jazzy-rclcpp
-vim
-git
-cmake
-build-essential
-```
-
-**requirements.pip3**:
-```
-numpy
-matplotlib
-rosdep
-colcon-common-extensions
-```
-
-**requirements.ppa**:
-```
-ppa:deadsnakes/ppa
-```
-
-### Custom .deb Packages
-Place `.deb` files in `vendor/` directory for automatic installation:
-```
-vendor/
-├── my-custom-lib_1.0.0_amd64.deb
-├── another-package_2.1.0_amd64.deb
-└── subdirectory/
-    └── nested-package_1.5.0_amd64.deb
-```
-
-## 🔧 Advanced Usage
-
-### Build Targets
-
-```bash
-# Force complete rebuild (ignores cache)
-make rebuild_force
-
-# Rebuild from specific layer
-make rebuild_from_layer LAYER=base    # Rebuild all layers
-make rebuild_from_layer LAYER=core    # Rebuild core + user
-make rebuild_from_layer LAYER=user    # Rebuild user only
-
-# Check build status
-make build_status
-
-# Show configuration
-make adore_cli_info
-```
-
-### Environment Variables
-
-```bash
-# Architecture selection
-export ARCH=amd64  # or arm64
-
-# ROS Distribution
-export ROS_DISTRO=jazzy
-
-# Custom hostname
-export HOSTNAME=my-dev-environment
-```
-
-### Registry Integration
-
-```bash
-# Set repository for registry operations
-export GITHUB_REPOSITORY=your-org/your-repo
-
-# Pull base/core images from registry
-make try_pull_base_images
-
-# Push base/core images to registry
-make push_base_images
-
-# Check registry status
-make registry_status
-```
-
-## 🌐 CI/CD Integration
-
-ADORe CLI supports automated builds and registry integration:
-
-### GitHub Actions
-The project includes reusable workflows:
-- **Native x86_64 builds**: `ubuntu-latest` runners
-- **Native ARM64 builds**: `ubuntu-24.04-arm` runners
-- **Cross-compilation**: x86_64 to ARM64
-- **Registry push**: Automatic base/core layer sharing
-
-### Key CI Features
-- Runs on all branches and pull requests
-- Pushes base images only from origin repository (not forks)
-- Intelligent caching using registry layers
-- Parallel builds for different architectures
-- Comprehensive logging and artifact uploads
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-**Environment Changes Detected**:
-```bash
-# Check what changed
-make show_changes
-
-# Rebuild affected layers
-make rebuild_from_layer LAYER=core  # For requirements changes
-make rebuild_from_layer LAYER=user  # For .deb package changes
-```
-
-**Build Failures**:
-```bash
-# Check Docker status
-docker info
-
-# Clean Docker cache
-docker system prune -f
-
-# Force complete rebuild
-make rebuild_force
-```
-
-**Container Issues**:
-```bash
-# Debug container interactively
-make debug_run
-
-# Debug as root
+# Debug container as root
 make debug_run_root
 
-# Check container logs
-docker logs adore_cli_<tag>
-```
-
-### Debug Information
-
-```bash
-# Show detailed configuration
-make adore_cli_info
-
-# Debug requirements processing
-cd adore_cli_core && make debug_requirements
-
-# Debug package installation
-cd adore_cli && make debug_packages
-
-# Test ROS2 installation
+# Test ROS2 is functional
 make test_ros2_installation
 ```
 
-## 📚 Architecture Details
+## License
 
-### Intelligent Tagging System
-
-ADORe CLI uses sophisticated tagging based on multiple factors:
-
-- **Base Layer**: `adore_cli_base:<arch>_<branch>_<hash>`
-- **Core Layer**: `adore_cli_core:<arch>_<branch>_<hash>_RH<requirements_hash>`
-- **User Layer**: `adore_cli:<arch>_<branch>_<hash>_PH<packages_hash>_<user>_UID<uid>GID<gid>`
-
-### Change Detection
-
-The system automatically detects changes and rebuilds only necessary layers:
-- **Base**: Rebuilds when ADORe CLI code changes
-- **Core**: Rebuilds when requirements files change
-- **User**: Rebuilds when .deb packages change
-
-### Registry Strategy
-
-- **Base/Core layers**: Shared across users and environments
-- **User layers**: Never pushed (user-specific)
-- **CI/CD optimization**: Pull cached layers before building
-- **Security**: Only origin repository can push images
-
-## 🤝 Contributing
-
-### Development Setup
-
-```bash
-# Clone for development
-git clone <adore-cli-repo>
-cd adore-cli
-git submodule update --init --recursive
-
-# Test changes
-make build
-make cli
-```
-
-### Adding Features
-
-1. **Add Requirements**: Place new `.system`, `.pip3`, or `.ppa` files in your project
-2. **Add Packages**: Place `.deb` files in `vendor/` directory  
-3. **Test**: Run `make rebuild_from_layer LAYER=core` or `LAYER=user`
-4. **Verify**: Use `make cli` to test the new environment
-
-## 📄 License
-
-This project is licensed under the Eclipse Public License - v 2.0 - see the [LICENSE](LICENSE) file for details.
-
----
-
-**Made with ❤️ for the ROS2 development community**
+Eclipse Public License 2.0 — see [LICENSE](LICENSE) for details.
