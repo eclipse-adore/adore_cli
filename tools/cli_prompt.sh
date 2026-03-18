@@ -63,30 +63,19 @@ case "${USER_CHOICE,,}" in
     c|continue|"")
         printf "${GREEN}→ Continuing with your current working environment${RESET}\n"
         if docker image inspect "adore_cli:$LAST_TAG" >/dev/null 2>&1; then
-            # Extract core tag
-            LAST_CORE_TAG=$(echo "$LAST_TAG" | sed -E 's/^(.+)_PH[a-f0-9]{7}_.*$/\1/')
-            if [[ "$LAST_CORE_TAG" == "$LAST_TAG" ]]; then
-                LAST_CORE_TAG=$(echo "$LAST_TAG" | sed -E 's/^(.+)_[^_]+_UID.*$/\1/')
-            fi
-            echo "Using core tag: $LAST_CORE_TAG"
-            
-            # Call make with overridden variables
             exec make --file="$MAKEFILE_PATH/adore_cli.mk" _execute_environment_action \
-                ADORE_CLI_TAG="$LAST_TAG" \
+                ADORE_CLI_USER_TAG="$LAST_TAG" \
                 ADORE_CLI_IMAGE="adore_cli:$LAST_TAG" \
-                ADORE_CLI_CONTAINER_NAME="adore_cli_$LAST_TAG" \
-                ADORE_CLI_CORE_IMAGE="adore_cli_core:$LAST_CORE_TAG"
+                ADORE_CLI_CONTAINER_NAME="adore_cli_${LAST_TAG}_$(whoami)"
         else
             printf "${YELLOW}Last successful environment no longer exists, building new one...${RESET}\n"
-            make --file="$MAKEFILE_PATH/adore_cli.mk" _build_adore_cli_layers
-            bash "$MAKEFILE_PATH/tools/tag_history_manager.sh" save "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_TAG}" 2>/dev/null || true
+            make --file="$MAKEFILE_PATH/adore_cli.mk" build_adore_cli
             exec make --file="$MAKEFILE_PATH/adore_cli.mk" _execute_environment_action
         fi
         ;;
     b|build)
         printf "${YELLOW}→ Building new environment with current changes${RESET}\n"
-        make --file="$MAKEFILE_PATH/adore_cli.mk" _build_adore_cli_layers
-        bash "$MAKEFILE_PATH/tools/tag_history_manager.sh" save "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_TAG}" 2>/dev/null || true
+        make --file="$MAKEFILE_PATH/adore_cli.mk" build_adore_cli
         exec make --file="$MAKEFILE_PATH/adore_cli.mk" _execute_environment_action
         ;;
     a|abort)

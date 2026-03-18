@@ -75,20 +75,36 @@ fi
 
 # === DISPLAY SETUP ===
 XVFB_PID=""
+
+# Returns 0 if a usable X server is already accessible (physical or pre-existing virtual),
+# returns 1 if we need to start our own Xvfb.
 detect_display() {
     [ "${VIRTUAL_DISPLAY:-false}" = "true" ] && return 1
+
+    # If DISPLAY is set, check whether the X11 socket for that display exists.
+    # The /tmp/.X11-unix directory is bind-mounted from the host, so sockets
+    # created by a host-side Xvfb are visible here.
+    if [ -n "${DISPLAY}" ]; then
+        local display_num="${DISPLAY##*:}"
+        display_num="${display_num%%.*}"
+        [ -S "/tmp/.X11-unix/X${display_num}" ] && return 0
+    fi
+
+    # Fallback: check for a connected DRM output (physical monitor).
     if [ -d "/sys/class/drm" ]; then
         for status_file in /sys/class/drm/card*/status; do
             [ -f "$status_file" ] && [ "$(cat "$status_file" 2>/dev/null)" = "connected" ] && return 0
         done
     fi
+
     return 1
 }
 
 if detect_display; then
     ACTIVE_DISPLAY="${DISPLAY:-:0}"
+    echo "Display detected, using DISPLAY=${ACTIVE_DISPLAY}"
 else
-    echo "Starting virtual display on :99..."
+    echo "No display detected, starting virtual display on :99..."
     Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset >/dev/null 2>&1 &
     XVFB_PID=$!
     echo "Virtual display started (PID: $XVFB_PID)"

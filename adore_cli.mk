@@ -247,10 +247,12 @@ cli: docker_host_context_check _cli_attach ## Start or attach to ADORe CLI
 _cli_attach:
 	@LAST_TAG=$$(bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" get_last 2>/dev/null || echo ""); \
 	CURRENT_TAG="${ADORE_CLI_USER_TAG}"; \
+	IMAGE_EXISTS=$$(docker image inspect "adore_cli:$$CURRENT_TAG" >/dev/null 2>&1 && echo "true" || echo "false"); \
 	if [ -n "$$LAST_TAG" ] && [ "$$LAST_TAG" != "$$CURRENT_TAG" ]; then \
 	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "$$LAST_TAG" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
+	elif [ "$$IMAGE_EXISTS" = "false" ]; then \
+	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
 	else \
-	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _ensure_user; \
 	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
 	fi
 
