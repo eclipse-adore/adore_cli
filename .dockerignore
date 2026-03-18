@@ -1,13 +1,33 @@
-.log/
+# === Runtime shell artifacts ===
 .zsh_history*
 .bash_history
-.config
-adore_cli
+.zshrc
+.zcompdump*
+.zcompcache/
+.env
+
+# === Build cache ===
+.ccache/
+
+# === Build/CI output ===
+build/
+
+# === Runtime logs ===
+.log/
+
+# === Layer build contexts (each layer passes its own subdirectory as context) ===
 adore_cli/
-.ccache
-**.jpg
-.ccache
-adore_cli_core
-build
+adore_cli_core/
+adore_cli_base/
+
+# === Source trees not part of any root-context build ===
+ros2_workspace/
+vendor/
+
+# === Dev/editor noise ===
 **/.tmp
-ros2_workspace
+**/__pycache__/
+**/*.pyc
+.DS_Store
+*.swp
+*~

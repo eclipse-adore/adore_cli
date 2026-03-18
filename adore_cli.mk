@@ -442,11 +442,39 @@ adore_cli_start:
 	    -v ${HOME}/.ssh:/home/${USER}/.ssh:ro \
 	    --add-host ${HOSTNAME}:127.0.0.1 \
 	    ${ADORE_CLI_IMAGE}
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk zenoh_start
+
+.PHONY: zenoh_start
+zenoh_start:
+	@source ${ADORE_CLI_MAKEFILE_PATH}/adore_cli.env 2>/dev/null || true; \
+	if [ "$${ZENOH_ENABLE:-false}" = "true" ]; then \
+	    ZENOH_IMAGE="$${ZENOH_IMAGE:-eclipse/zenoh-bridge-ros2dds:latest}"; \
+	    ZENOH_CONTAINER="${ADORE_CLI_CONTAINER_NAME}_zenoh"; \
+	    if docker ps --format "{{.Names}}" | grep -q "^$${ZENOH_CONTAINER}$$"; then \
+	        echo "✓ Zenoh already running: $${ZENOH_CONTAINER}"; \
+	    else \
+	        echo "Starting Zenoh bridge: $${ZENOH_IMAGE}"; \
+	        docker run --detach \
+	            --name "$${ZENOH_CONTAINER}" \
+	            --network host \
+	            --ipc host \
+	            --pid host \
+	            --restart unless-stopped \
+	            "$${ZENOH_IMAGE}"; \
+	    fi \
+	fi
+
+.PHONY: zenoh_stop
+zenoh_stop:
+	@ZENOH_CONTAINER="${ADORE_CLI_CONTAINER_NAME}_zenoh"; \
+	docker stop "$${ZENOH_CONTAINER}" 2>/dev/null || true; \
+	docker rm -f "$${ZENOH_CONTAINER}" 2>/dev/null || true
 
 .PHONY: adore_cli_teardown
 adore_cli_teardown:
 	@docker stop ${ADORE_CLI_CONTAINER_NAME} 2>/dev/null || true
 	@docker rm -f ${ADORE_CLI_CONTAINER_NAME} 2>/dev/null || true
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk zenoh_stop
 	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk disable_x11_forwarding
 
 .PHONY: adore_cli_attach

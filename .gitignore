@@ -1,16 +1,34 @@
-.log/
-.zsh_history*
-.bash_history
-catkin_workspace/
-.config
-.ccache
-**/.tmp
-.tmp
-build
-ros2_workspace
-adore_cli/packages
-adore_cli/packages_manifest.txt
-.env
-adore_cli/context
+# === Runtime shell artifacts ===
 .zsh_history
+.bash_history
 .zshrc
+.zcompdump
+.zcompdump.zwc
+.zcompcache/
+.env
+
+# === Build cache ===
+.ccache/
+
+# === Build/CI output ===
+build/
+
+# === Runtime logs ===
+.log/
+
+# === Generated gather/requirements artifacts ===
+adore_cli/context/
+
+# === Vendor build output (keep vendor/README.md) ===
+vendor/build/
+
+# === Python ===
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# === Editor/OS noise ===
+.DS_Store
+*.swp
+*.swo
+*~
