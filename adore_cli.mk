@@ -282,7 +282,7 @@ _execute_environment_action:
 	    -e ADORE_CLI_BASE_IMAGE=${ADORE_CLI_BASE_IMAGE} \
 	    -e ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME} \
 	    -e ROS_DISTRO=${ROS_DISTRO} \
-	    -e DISPLAY=${DISPLAY} \
+	    -e DISPLAY=${DISPLAY:-:99} \
 	    ${ADORE_CLI_CONTAINER_NAME} \
 	    /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true
 	@echo "Detached. Container still running. Use 'make cli' to reattach or 'make stop' to stop."
@@ -420,7 +420,7 @@ adore_cli_start:
 	    -e USER=${USER} \
 	    -e UID=${USER_UID} \
 	    -e GID=${USER_GID} \
-	    -e DISPLAY=${DISPLAY} \
+	    -e DISPLAY=${DISPLAY:-:99} \
 	    -e ROS_DISTRO=${ROS_DISTRO} \
 	    -e HISTFILE=/tmp/adore_cli/.zsh_history \
 	    -e ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} \
@@ -490,7 +490,7 @@ adore_cli_attach:
 	    -e ADORE_CLI_BASE_IMAGE=${ADORE_CLI_BASE_IMAGE} \
 	    -e ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME} \
 	    -e ROS_DISTRO=${ROS_DISTRO} \
-	    -e DISPLAY=${DISPLAY} \
+	    -e DISPLAY=${DISPLAY:-:99} \
 	    ${ADORE_CLI_CONTAINER_NAME} \
 	    /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true
 

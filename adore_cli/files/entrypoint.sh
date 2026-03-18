@@ -91,6 +91,9 @@ if ! detect_display; then
     XVFB_PID=$!
     echo "Virtual display started (PID: $XVFB_PID)"
     sleep 2
+    export DISPLAY=:99
+    echo "DISPLAY=:99" >> /etc/environment
+    echo "export DISPLAY=:99" >> /etc/bash.bashrc
 fi
 
 # === RSYSLOG SETUP ===
