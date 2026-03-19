@@ -41,4 +41,4 @@ if [[ -z "$ROS_SETUP_SOURCED" ]]; then
     esac
     export ROS_SETUP_SOURCED=1
 fi
-
+source /opt/adore_venv/bin/activate
