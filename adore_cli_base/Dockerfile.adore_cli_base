@@ -43,4 +43,10 @@ RUN mkdir -p /tmp/adore /opt/adore \
              /var/log/syslog /var/spool/rsyslog && \
     chmod -R 777 /var/log/ros2 /var/lib/rsyslog /var/spool/rsyslog
 
+RUN git clone --recursive https://github.com/osqp/osqp.git /tmp/osqp && \
+    cmake -S /tmp/osqp -B /tmp/osqp/build -G "Unix Makefiles" && \
+    cmake --build /tmp/osqp/build -j$(nproc) && \
+    cmake --install /tmp/osqp/build && \
+    rm -rf /tmp/osqp
+
 WORKDIR /tmp/adore

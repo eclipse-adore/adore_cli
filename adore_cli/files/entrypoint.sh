@@ -166,6 +166,8 @@ if [ -f /opt/adore_venv/bin/activate ]; then
     source /opt/adore_venv/bin/activate
     export VIRTUAL_ENV=/opt/adore_venv
     export PATH="/opt/adore_venv/bin:$PATH"
+    PYVER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+    export PYTHONPATH="/opt/ros/${ROS_DISTRO}/lib/python${PYVER}/site-packages:/opt/adore_venv/lib/python${PYVER}/site-packages:${PYTHONPATH}"
 fi
 
 # Keep container alive. Interactive sessions attach via:
