@@ -94,6 +94,9 @@ endif
 ADORE_CLI_CORE_IMAGE      := adore_cli_core:${ADORE_CLI_CORE_TAG}
 ADORE_CLI_BASE_IMAGE      := adore_cli_base:${ADORE_CLI_BASE_TAG}
 ADORE_CLI_IMAGE           := adore_cli:${ADORE_CLI_USER_TAG}
+# Canonical tag is always adore_cli-branch-scoped (no parent context), matching what CI pushes
+ADORE_CLI_CANONICAL_USER_TAG := ${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_RH${REQUIREMENTS_HASH}_PH${PACKAGES_HASH}
+ADORE_CLI_CANONICAL_IMAGE    := adore_cli:${ADORE_CLI_CANONICAL_USER_TAG}
 ADORE_CLI_CONTAINER_NAME  := adore_cli_${ADORE_CLI_USER_TAG}_$(shell whoami)
 ADORE_CLI_WORKING_DIRECTORY ?= ${SOURCE_DIRECTORY}
 
@@ -224,22 +227,26 @@ _ensure_core:
 _ensure_base: _ensure_core
 	@if ! docker image inspect ${ADORE_CLI_BASE_IMAGE} >/dev/null 2>&1; then \
 	    echo "Base image missing, attempting registry pull..."; \
-	    docker pull "ghcr.io/${PARENT_REPO}/${ADORE_CLI_BASE_IMAGE}" 2>/dev/null && \
-	        docker tag "ghcr.io/${PARENT_REPO}/${ADORE_CLI_BASE_IMAGE}" "${ADORE_CLI_BASE_IMAGE}" || \
+	    docker pull "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}" 2>/dev/null && \
+	        docker tag "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}" "${ADORE_CLI_BASE_IMAGE}" || \
 	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_base; \
 	else echo "✓ Base: ${ADORE_CLI_BASE_IMAGE}"; fi
 
 .PHONY: _ensure_user
 _ensure_user: _ensure_base
 	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
-	    echo "User image missing, attempting registry pull..."; \
-	    ( docker pull "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}" 2>/dev/null && \
-	        docker tag "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
-	    ( [ "${PARENT_REPO}" != "${ADORE_CLI_REPO}" ] && \
-	        docker pull "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_IMAGE}" 2>/dev/null && \
-	        docker tag "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
-	    ( cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli && make gather && \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user ); \
+	    if docker image inspect ${ADORE_CLI_CANONICAL_IMAGE} >/dev/null 2>&1; then \
+	        echo "Reusing canonical build: ${ADORE_CLI_CANONICAL_IMAGE}"; \
+	        docker tag "${ADORE_CLI_CANONICAL_IMAGE}" "${ADORE_CLI_IMAGE}"; \
+	    else \
+	        echo "User image missing, attempting registry pull..."; \
+	        ( docker pull "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}" 2>/dev/null && \
+	            docker tag "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
+	        ( docker pull "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CANONICAL_IMAGE}" 2>/dev/null && \
+	            docker tag "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CANONICAL_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
+	        ( cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli && make gather && \
+	            make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user ); \
+	    fi; \
 	else echo "✓ User: ${ADORE_CLI_IMAGE}"; fi
 
 # === MAIN TARGETS ===
@@ -379,8 +386,8 @@ push_core_image: ## Push core image to registry
 
 .PHONY: push_base_image
 push_base_image: ## Push base image to registry
-	docker tag  "${ADORE_CLI_BASE_IMAGE}" "ghcr.io/${PARENT_REPO}/${ADORE_CLI_BASE_IMAGE}"
-	docker push "ghcr.io/${PARENT_REPO}/${ADORE_CLI_BASE_IMAGE}"
+	docker tag  "${ADORE_CLI_BASE_IMAGE}" "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"
+	docker push "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"
 
 .PHONY: push_user_image
 push_user_image: ## Push user image to registry
