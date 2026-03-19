@@ -165,6 +165,12 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "        Is DISPLAY variable properly set?\n"
     printf "        Can GUI applications connect to X11 server?\n"
     printf "        Are windows actually visible on the host display?\n"
+
+    if [ "$GITHUB_ACTIONS" = "true" ]; then
+        echo "Running inside GitHub CI: skipping x11_integration_test"
+        exit 0
+    fi
+
     printf "    Starting Docker context...\n"
     
     if ! make start; then

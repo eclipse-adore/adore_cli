@@ -66,6 +66,9 @@ USER_GID := $(shell id -g)
 UID      ?= $(USER_UID)
 GID      ?= $(USER_GID)
 
+_HOST_DISPLAY_NUM  := $(shell echo "$(DISPLAY)" | sed 's/.*://' | cut -d. -f1)
+DISPLAY_DOCKER_ARG := $(if $(shell [ -S "/tmp/.X11-unix/X$(_HOST_DISPLAY_NUM)" ] 2>/dev/null && echo 1),-e DISPLAY=$(DISPLAY),-e VIRTUAL_DISPLAY=true)
+
 ADORE_CLI_BRANCH_SHORT := $(shell echo "${ADORE_CLI_BRANCH}" | sed 's|.*/||' | cut -c1-20 | sed 's/_$$//')
 PARENT_BRANCH_SHORT    := $(shell echo "${PARENT_BRANCH}"    | sed 's|.*/||' | cut -c1-20 | sed 's/_$$//')
 
@@ -422,7 +425,7 @@ adore_cli_start:
 	    -e USER=${USER} \
 	    -e UID=${USER_UID} \
 	    -e GID=${USER_GID} \
-	    -e DISPLAY=${DISPLAY} \
+	    ${DISPLAY_DOCKER_ARG} \
 	    -e ROS_DISTRO=${ROS_DISTRO} \
 	    -e HISTFILE=/tmp/adore_cli/.zsh_history \
 	    -e ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} \
