@@ -69,8 +69,26 @@ UID      ?= $(USER_UID)
 GID      ?= $(USER_GID)
 
 DISPLAY ?=
-_HOST_DISPLAY_NUM  := $(shell echo "$(DISPLAY)" | sed 's/.*://' | cut -d. -f1)
-DISPLAY_DOCKER_ARG := $(if $(shell [ -S "/tmp/.X11-unix/X$(_HOST_DISPLAY_NUM)" ] 2>/dev/null && echo 1),-e DISPLAY=$(DISPLAY),-e VIRTUAL_DISPLAY=true)
+
+# Determine whether the container should use the host X server or an internal Xvfb.
+# Priority:
+#   1. VIRTUAL_DISPLAY=true in adore_cli.env  → always use Xvfb inside the container
+#   2. xhost available AND X11 socket present for $DISPLAY → forward the host display
+#   3. Otherwise (no xhost, no socket, or no DISPLAY)  → use Xvfb inside the container
+DISPLAY_DOCKER_ARG := $(shell \
+    source "$(ADORE_CLI_MAKEFILE_PATH)/adore_cli.env" 2>/dev/null; \
+    if [ "$${VIRTUAL_DISPLAY:-false}" = "true" ]; then \
+        printf -- '-e VIRTUAL_DISPLAY=true'; \
+    elif command -v xhost >/dev/null 2>&1 \
+        && [ -n "$(DISPLAY)" ] \
+        && [ -S "/tmp/.X11-unix/X$$(printf '%s' '$(DISPLAY)' | sed 's/.*://' | cut -d. -f1)" ]; then \
+        printf -- '-e DISPLAY=$(DISPLAY)'; \
+    else \
+        printf -- '-e VIRTUAL_DISPLAY=true'; \
+    fi)
+
+# Only mount /tmp/.X11-unix when it exists on the host (absent in headless/CI environments).
+X11_UNIX_MOUNT := $(if $(wildcard /tmp/.X11-unix),-v /tmp/.X11-unix:/tmp/.X11-unix,)
 
 # === IMAGE TAGS ===
 # core:  tied to the adore_cli commit (changes when ROS layer or core packages change)
@@ -424,7 +442,7 @@ adore_cli_start:
 	    -e ADORE_CLI_CORE_IMAGE=${ADORE_CLI_CORE_IMAGE} \
 	    -e ADORE_CLI_BASE_IMAGE=${ADORE_CLI_BASE_IMAGE} \
 	    -e ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME} \
-	    -v /tmp/.X11-unix:/tmp/.X11-unix \
+	    ${X11_UNIX_MOUNT} \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v ${ADORE_CLI_MAKEFILE_PATH}/.zshrc:/home/${USER}/.zshrc \
 	    -v ${ADORE_CLI_MAKEFILE_PATH}:/tmp/adore_cli \
