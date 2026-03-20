@@ -15,7 +15,7 @@
 set -euo pipefail
 
 REQUIREMENT_EXTENSIONS=(".pip3" ".system" ".ppa")
-EXCLUDED_DIRECTORIES=(".log" ".git" "build" ".tmp" "adore_cli_base" "adore_cli_core")
+EXCLUDED_DIRECTORIES=(".log" ".git" "build" ".tmp" "adore_cli_base" "adore_cli_core" "context")
 SOURCE_DIRECTORY="${SOURCE_DIRECTORY:-$(pwd)}"
 
 find_requirements() {

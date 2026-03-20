@@ -54,8 +54,10 @@ ADORE_CLI_SHORT_HASH := $(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git rev-parse -
 ADORE_CLI_IS_DIRTY   := $(shell cd ${ADORE_CLI_MAKEFILE_PATH} && git status --porcelain 2>/dev/null | grep -q . && echo "true" || echo "false")
 
 # Parent repo identity
-PARENT_BRANCH     ?= $(shell bash ${MAKE_GADGETS_PATH}/tools/branch_name.sh 2>/dev/null || echo NOBRANCH)
-PARENT_SHORT_HASH ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo NOHASH)
+PARENT_REPO := $(shell git config --get remote.origin.url 2>/dev/null | sed -e 's|.*github.com[:/]||' -e 's|\.git$$||' | tr '[:upper:]' '[:lower:]')
+ifeq ($(PARENT_REPO),)
+    PARENT_REPO := $(shell git rev-parse --show-superproject-working-tree 2>/dev/null | xargs -I {} git -C {} config --get remote.origin.url 2>/dev/null | sed -e 's|.*github.com[:/]||' -e 's|\.git$$||' | tr '[:upper:]' '[:lower:]')
+endif
 
 # Content hashes
 REQUIREMENTS_HASH := $(shell bash ${ADORE_CLI_MAKEFILE_PATH}/tools/requirements_hashing_util.sh hash "${SOURCE_DIRECTORY}" 2>/dev/null | cut -c1-7)
@@ -69,13 +71,10 @@ GID      ?= $(USER_GID)
 _HOST_DISPLAY_NUM  := $(shell echo "$(DISPLAY)" | sed 's/.*://' | cut -d. -f1)
 DISPLAY_DOCKER_ARG := $(if $(shell [ -S "/tmp/.X11-unix/X$(_HOST_DISPLAY_NUM)" ] 2>/dev/null && echo 1),-e DISPLAY=$(DISPLAY),-e VIRTUAL_DISPLAY=true)
 
-ADORE_CLI_BRANCH_SHORT := $(shell echo "${ADORE_CLI_BRANCH}" | sed 's|.*/||' | cut -c1-20 | sed 's/_$$//')
-PARENT_BRANCH_SHORT    := $(shell echo "${PARENT_BRANCH}"    | sed 's|.*/||' | cut -c1-20 | sed 's/_$$//')
-
 # === IMAGE TAGS ===
 # core:  tied to the adore_cli commit (changes when ROS layer or core packages change)
-# base:  tied to adore_cli commit + requirements hash (changes when dev tools change)
-# user:  tied to everything + parent project state + package hash
+# base:  tied to adore_cli commit (changes when dev tools change)
+# user:  portable across parent branches — arch + adore_cli commit + requirements + packages
 ADORE_CLI_CORE_TAG := ${ARCH}_${ADORE_CLI_SHORT_HASH}
 ADORE_CLI_BASE_TAG := ${ARCH}_${ADORE_CLI_SHORT_HASH}
 
@@ -84,20 +83,12 @@ ifeq ($(ADORE_CLI_IS_DIRTY),true)
     ADORE_CLI_BASE_TAG := ${ADORE_CLI_BASE_TAG}_dirty
 endif
 
-# RH and PH always included so the runtime status scripts can extract them.
-ifeq ($(PARENT_IS_ADORE_CLI),true)
-    ADORE_CLI_USER_TAG := ${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_RH${REQUIREMENTS_HASH}_PH${PACKAGES_HASH}
-else
-    ADORE_CLI_USER_TAG := ${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_${PARENT_BRANCH_SHORT}_${PARENT_SHORT_HASH}_RH${REQUIREMENTS_HASH}_PH${PACKAGES_HASH}
-endif
+ADORE_CLI_USER_TAG := ${ARCH}_${ADORE_CLI_SHORT_HASH}_RH${REQUIREMENTS_HASH}_PH${PACKAGES_HASH}
 
-ADORE_CLI_CORE_IMAGE      := adore_cli_core:${ADORE_CLI_CORE_TAG}
-ADORE_CLI_BASE_IMAGE      := adore_cli_base:${ADORE_CLI_BASE_TAG}
-ADORE_CLI_IMAGE           := adore_cli:${ADORE_CLI_USER_TAG}
-# Canonical tag is always adore_cli-branch-scoped (no parent context), matching what CI pushes
-ADORE_CLI_CANONICAL_USER_TAG := ${ARCH}_${ADORE_CLI_BRANCH_SHORT}_${ADORE_CLI_SHORT_HASH}_RH${REQUIREMENTS_HASH}_PH${PACKAGES_HASH}
-ADORE_CLI_CANONICAL_IMAGE    := adore_cli:${ADORE_CLI_CANONICAL_USER_TAG}
-ADORE_CLI_CONTAINER_NAME  := adore_cli_${ADORE_CLI_USER_TAG}_$(shell whoami)
+ADORE_CLI_CORE_IMAGE     := adore_cli_core:${ADORE_CLI_CORE_TAG}
+ADORE_CLI_BASE_IMAGE     := adore_cli_base:${ADORE_CLI_BASE_TAG}
+ADORE_CLI_IMAGE          := adore_cli:${ADORE_CLI_USER_TAG}
+ADORE_CLI_CONTAINER_NAME := adore_cli_${ADORE_CLI_USER_TAG}_$(shell whoami)
 ADORE_CLI_WORKING_DIRECTORY ?= ${SOURCE_DIRECTORY}
 
 ADORE_TAG  ?= $(ADORE_CLI_USER_TAG)
@@ -195,8 +186,6 @@ _build_user: check_cross_compile_deps
 	        --build-arg ARCH=${ARCH} \
 	        --build-arg BRANCH=${ADORE_CLI_BRANCH} \
 	        --build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
-	        --build-arg PARENT_BRANCH=${PARENT_BRANCH} \
-	        --build-arg PARENT_SHORT_HASH=${PARENT_SHORT_HASH} \
 	        -t ${ADORE_CLI_IMAGE} \
 	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile.adore_cli \
 	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli; \
@@ -207,8 +196,6 @@ _build_user: check_cross_compile_deps
 	        --build-arg ARCH=${ARCH} \
 	        --build-arg BRANCH=${ADORE_CLI_BRANCH} \
 	        --build-arg SHORT_HASH=${ADORE_CLI_SHORT_HASH} \
-	        --build-arg PARENT_BRANCH=${PARENT_BRANCH} \
-	        --build-arg PARENT_SHORT_HASH=${PARENT_SHORT_HASH} \
 	        -t ${ADORE_CLI_IMAGE} \
 	        -f ${ADORE_CLI_MAKEFILE_PATH}/adore_cli/Dockerfile.adore_cli \
 	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli; \
@@ -235,18 +222,13 @@ _ensure_base: _ensure_core
 .PHONY: _ensure_user
 _ensure_user: _ensure_base
 	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
-	    if docker image inspect ${ADORE_CLI_CANONICAL_IMAGE} >/dev/null 2>&1; then \
-	        echo "Reusing canonical build: ${ADORE_CLI_CANONICAL_IMAGE}"; \
-	        docker tag "${ADORE_CLI_CANONICAL_IMAGE}" "${ADORE_CLI_IMAGE}"; \
-	    else \
-	        echo "User image missing, attempting registry pull..."; \
-	        ( docker pull "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}" 2>/dev/null && \
-	            docker tag "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
-	        ( docker pull "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CANONICAL_IMAGE}" 2>/dev/null && \
-	            docker tag "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CANONICAL_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
-	        ( cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli && make gather && \
-	            make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user ); \
-	    fi; \
+	    echo "User image missing, attempting registry pull..."; \
+	    ( docker pull "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}" 2>/dev/null && \
+	        docker tag "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
+	    ( docker pull "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_IMAGE}" 2>/dev/null && \
+	        docker tag "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
+	    ( cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli && make gather && \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user ); \
 	else echo "✓ User: ${ADORE_CLI_IMAGE}"; fi
 
 # === MAIN TARGETS ===
@@ -258,12 +240,12 @@ _cli_attach:
 	@LAST_TAG=$$(bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" get_last 2>/dev/null || echo ""); \
 	CURRENT_TAG="${ADORE_CLI_USER_TAG}"; \
 	IMAGE_EXISTS=$$(docker image inspect "adore_cli:$$CURRENT_TAG" >/dev/null 2>&1 && echo "true" || echo "false"); \
-	if [ -n "$$LAST_TAG" ] && [ "$$LAST_TAG" != "$$CURRENT_TAG" ]; then \
-	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "$$LAST_TAG" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
-	elif [ "$$IMAGE_EXISTS" = "false" ]; then \
-	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
-	else \
+	if [ "$$IMAGE_EXISTS" = "true" ]; then \
 	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
+	elif [ -n "$$LAST_TAG" ] && [ "$$LAST_TAG" != "$$CURRENT_TAG" ]; then \
+	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "$$LAST_TAG" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
+	else \
+	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
 	fi
 
 .PHONY: _execute_environment_action
@@ -400,11 +382,11 @@ push_images: push_core_image push_base_image push_user_image ## Push all images 
 # === CONTAINER LIFECYCLE ===
 .PHONY: enable_x11_forwarding
 enable_x11_forwarding:
-	@command -v xhost >/dev/null 2>&1 && xhost +local:docker 2>/dev/null || true
+	@command -v xhost >/dev/null 2>&1 && xhost +local:docker >/dev/null 2>&1 || true
 
 .PHONY: disable_x11_forwarding
 disable_x11_forwarding:
-	@command -v xhost >/dev/null 2>&1 && xhost -local:docker 2>/dev/null || true
+	@command -v xhost >/dev/null 2>&1 && xhost -local:docker >/dev/null 2>&1 || true
 
 .PHONY: adore_cli_setup
 adore_cli_setup:
@@ -530,7 +512,6 @@ adore_cli_info: ## Show current configuration
 	@echo "  Container : ${ADORE_CLI_CONTAINER_NAME}"
 	@echo "  Arch  : ${ARCH} | ROS: ${ROS_DISTRO}"
 	@echo "  adore_cli branch : ${ADORE_CLI_BRANCH} (${ADORE_CLI_SHORT_HASH}) dirty=${ADORE_CLI_IS_DIRTY}"
-	@echo "  Parent branch    : ${PARENT_BRANCH} (${PARENT_SHORT_HASH})"
 	@echo "  Requirements hash: ${REQUIREMENTS_HASH}"
 	@echo "  Packages hash    : ${PACKAGES_HASH}"
 

@@ -5,15 +5,11 @@ ARG ROS_DISTRO=jazzy
 ARG ARCH
 ARG BRANCH
 ARG SHORT_HASH
-ARG PARENT_BRANCH
-ARG PARENT_SHORT_HASH
 
 LABEL org.adore.image-type="user" \
       org.adore.arch="${ARCH}" \
       org.adore.branch="${BRANCH}" \
-      org.adore.commit="${SHORT_HASH}" \
-      org.adore.parent-branch="${PARENT_BRANCH}" \
-      org.adore.parent-commit="${PARENT_SHORT_HASH}"
+      org.adore.commit="${SHORT_HASH}"
 
 COPY context/requirements.ppa    /tmp/build/
 COPY context/requirements.system /tmp/build/

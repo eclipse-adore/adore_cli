@@ -18,7 +18,7 @@ GID      := ${USER_GID}
 
 include ${ROOT_DIR}/adore_cli.mk
 include ${ROOT_DIR}/package.mk
--include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
+include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 
 .PHONY: build
 build: clean build_adore_cli ## Build all ADORe CLI layers
@@ -33,23 +33,6 @@ debug_run_root:
 
 .PHONY: save
 save: save_docker_images ## Save all ADORe Docker images to disk in .docker_cache
-
-.PHONY: save_docker_images
-save_docker_images:
-	@source ${ROOT_DIR}/ci.env && \
-	echo "Saving docker images to file, output directory: ${ROOT_DIR}/build" && \
-	echo "  images: $${docker_images[@]}"
-	@mkdir -p "${ROOT_DIR}/build"
-	@source ${ROOT_DIR}/ci.env && \
-	for docker_image in "$${docker_images[@]}"; do \
-	    safe_name="$${docker_image//\//_}"; safe_name="$${safe_name//:/_}"; \
-	    if docker image inspect "$${docker_image}" >/dev/null 2>&1; then \
-	        echo "  Saving image: $${docker_image} to ${ROOT_DIR}/build/$${safe_name}.tar"; \
-	        docker save --output "${ROOT_DIR}/build/$${safe_name}.tar" "$${docker_image}"; \
-	    else \
-	        echo "  Skipping image (not present locally): $${docker_image}"; \
-	    fi; \
-	done
 
 .PHONY: clean_all
 clean_all: ## Remove all adore_cli* Docker images regardless of tag
