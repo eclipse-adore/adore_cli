@@ -423,6 +423,7 @@ adore_cli_start:
 	fi
 	docker run \
 	    --detach \
+	    --init \
 	    --name ${ADORE_CLI_CONTAINER_NAME} \
 	    --hostname ${HOSTNAME} \
 	    --network host \
