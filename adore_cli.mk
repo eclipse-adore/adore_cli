@@ -68,6 +68,7 @@ USER_GID := $(shell id -g)
 UID      ?= $(USER_UID)
 GID      ?= $(USER_GID)
 
+DISPLAY ?=
 _HOST_DISPLAY_NUM  := $(shell echo "$(DISPLAY)" | sed 's/.*://' | cut -d. -f1)
 DISPLAY_DOCKER_ARG := $(if $(shell [ -S "/tmp/.X11-unix/X$(_HOST_DISPLAY_NUM)" ] 2>/dev/null && echo 1),-e DISPLAY=$(DISPLAY),-e VIRTUAL_DISPLAY=true)
 
