@@ -198,12 +198,21 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
         exit 1
     fi
     
-    sleep 5
-    
-    # Check if window is visible using xwininfo
-    if ! make run cmd="xwininfo -tree -root | grep -i xeyes" >/dev/null 2>&1; then
+    local timeout=20
+    local elapsed=0
+    local window_found=false
+    while [[ $elapsed -lt $timeout ]]; do
+        if make run cmd="xwininfo -tree -root | grep -i xeyes" >/dev/null 2>&1; then
+            window_found=true
+            break
+        fi
+        sleep 1
+        (( elapsed++ ))
+    done
+
+    if [[ "$window_found" != "true" ]]; then
         status=$(bold $(red "FAILED"))
-        message="        GUI window not found in X11 window tree."
+        message="        GUI window not found in X11 window tree after ${timeout}s."
         printf "    Message:\n%s\n" "$message"
         printf "    %-77s %s\n" "Status:" "${status}"
         make stop >/dev/null 2>&1
