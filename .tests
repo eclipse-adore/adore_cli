@@ -179,7 +179,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     fi
 
     printf "\n    --- DISPLAY variable ---\n"
-    display_val=$(make run cmd='echo "$DISPLAY"' 2>/dev/null | tail -1)
+    display_val=$(make run cmd='echo "$$DISPLAY"' 2>/dev/null | tail -1)
     if [ -z "${display_val}" ]; then
         status=$(bold $(red "FAILED"))
         printf "    DISPLAY is not set inside the container.\n"
