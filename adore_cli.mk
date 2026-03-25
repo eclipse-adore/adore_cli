@@ -472,6 +472,9 @@ adore_cli_start:
 	    -v ${HOME}/.ssh:/home/${USER}/.ssh:ro \
 	    --add-host ${HOSTNAME}:127.0.0.1 \
 	    ${ADORE_CLI_IMAGE}
+	@echo "Waiting for entrypoint to complete display setup..."
+	@timeout 30 bash -c \
+	    'until docker exec ${ADORE_CLI_CONTAINER_NAME} test -f /tmp/.adore_display 2>/dev/null; do sleep 0.5; done'
 	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk zenoh_start
 
 .PHONY: zenoh_start

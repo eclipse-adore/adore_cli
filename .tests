@@ -179,11 +179,16 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     fi
 
     printf "\n    --- DISPLAY variable ---\n"
-    display_val=$(make run cmd='cat /tmp/.adore_display' 2>/dev/null | grep -o 'DISPLAY=.*' | cut -d= -f2- | tail -1)
+    local container
+    container=$(make container_name_adore_cli 2>/dev/null)
+    display_val=$(docker exec "${container}" cat /tmp/.adore_display 2>/dev/null | grep -o 'DISPLAY=.*' | cut -d= -f2- | tail -1)
     if [ -z "${display_val}" ]; then
         status=$(bold $(red "FAILED"))
         printf "    DISPLAY is not set inside the container.\n"
-        printf "    Check adore_cli.mk DISPLAY_DOCKER_ARG detection and entrypoint.sh display setup.\n"
+        printf "    /tmp/.adore_display contents:\n"
+        docker exec "${container}" cat /tmp/.adore_display 2>&1 || printf "    (file not found)\n"
+        printf "    Container logs (tail):\n"
+        docker logs "${container}" 2>&1 | tail -20
         printf "    %-77s %s\n" "Status:" "${status}"
         make stop
         exit 1
@@ -194,11 +199,12 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     display_num="${display_val##*:}"
     display_num="${display_num%%.*}"
     socket="/tmp/.X11-unix/X${display_num}"
-    if ! make run cmd="test -S '${socket}'" 2>/dev/null; then
+    if ! docker exec "${container}" test -S "${socket}" 2>/dev/null; then
         status=$(bold $(red "FAILED"))
         printf "    X11 socket %s does not exist inside the container.\n" "${socket}"
         printf "    If using host display: check /tmp/.X11-unix is mounted (-v /tmp/.X11-unix:/tmp/.X11-unix).\n"
         printf "    If using Xvfb: check that entrypoint.sh Xvfb started cleanly (check container logs).\n"
+        docker logs "${container}" 2>&1 | tail -20
         printf "    %-77s %s\n" "Status:" "${status}"
         make stop
         exit 1
@@ -206,7 +212,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "    X11 socket %s: found\n" "${socket}"
 
     printf "\n    --- xdpyinfo ---\n"
-    cmd_out=$(make run cmd="xdpyinfo" 2>&1)
+    cmd_out=$(docker exec -e DISPLAY="${display_val}" "${container}" xdpyinfo 2>&1)
     cmd_rc=$?
     if [ "${cmd_rc}" -ne 0 ]; then
         status=$(bold $(red "FAILED"))
@@ -219,9 +225,8 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     printf "    xdpyinfo: OK\n"
 
     printf "\n    --- xeyes ---\n"
-    cmd_out=$(make run cmd="timeout 1 xeyes" 2>&1)
+    cmd_out=$(docker exec -e DISPLAY="${display_val}" "${container}" timeout 1 xeyes 2>&1)
     cmd_rc=$?
-    # exit 124 = killed by timeout after a successful start — that is a pass
     if [ "${cmd_rc}" -ne 0 ] && [ "${cmd_rc}" -ne 124 ]; then
         status=$(bold $(red "FAILED"))
         printf "    xeyes failed (exit %d) on DISPLAY=%s\n" "${cmd_rc}" "${display_val}"
