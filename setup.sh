@@ -16,8 +16,8 @@
 SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ROS2_WORKSPACE_DIRECTORY="$(realpath "${SCRIPT_DIRECTORY}/ros2_workspace")"
 
-if [ -z "${DISPLAY:-}" ]; then
-    export DISPLAY=:99
+if [ -z "${DISPLAY:-}" ] && [ -f /tmp/.adore_display ]; then
+    source /tmp/.adore_display 2>/dev/null || true
 fi
 
 if [[ -z "$ROS_SETUP_SOURCED" ]]; then

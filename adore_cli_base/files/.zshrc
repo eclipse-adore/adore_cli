@@ -5,7 +5,7 @@ if [[ $- != *i* ]] || [[ -z "$PS1" ]] || [[ -n "$DOCKER_EXEC_NON_INTERACTIVE" ]]
         source /tmp/adore/setup.sh 2>/dev/null
     fi
     if [[ -z "${DISPLAY}" ]]; then
-        export DISPLAY=:99
+        [ -f /tmp/.adore_display ] && source /tmp/.adore_display 2>/dev/null || true
     fi
     return 0
 fi

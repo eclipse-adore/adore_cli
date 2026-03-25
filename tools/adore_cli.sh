@@ -18,8 +18,8 @@ set -euo pipefail
 SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 echoerr (){ printf "%s" "$@" >&2;}
 exiterr (){ echoerr "$@"; exit 1;}
-if [ -z "${DISPLAY:-}" ]; then
-    export DISPLAY=:99
+if [ -z "${DISPLAY:-}" ] && [ -f /tmp/.adore_display ]; then
+    source /tmp/.adore_display 2>/dev/null || true
 fi
 
 
