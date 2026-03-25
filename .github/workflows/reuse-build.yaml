@@ -83,7 +83,7 @@ jobs:
         shell: bash
         run: |
           df -h
-          make build
+          make rebuild_from_layer LAYER=core
 
       - name: Test
         shell: bash
@@ -92,45 +92,18 @@ jobs:
           make save
           make test
 
-      - name: Registry Status Summary
-        if: github.event_name != 'pull_request'
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        shell: bash
-        run: |
-          echo "=== Registry Status ==="
-          make registry_status || true
-
       - name: Upload Logs
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: ${{ inputs.archive_name }}
           path: .log
-        if: always()
 
-      - name: Push Base Images to Registry
-        if: github.event_name != 'pull_request' && github.repository == 'eclipse-adore/adore_cli'
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        shell: bash
-        run: |
-          echo "Publishing base and core images to registry..."
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Registry: ${{ env.REGISTRY }}"
-          echo "Branch: ${{ github.ref_name }}"
-          
-          make registry_status || true
-          make push_base_image
-          make push_core_image
-          
-          echo "Images published successfully"
-
-      - name: Registry Status Summary
+      - name: Push Images to Registry
         if: github.event_name != 'pull_request'
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
-          echo "=== Final Registry Status ==="
-          make registry_status || true
+          make push_images
 

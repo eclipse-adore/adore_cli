@@ -76,43 +76,78 @@ fi
 # === DISPLAY SETUP ===
 XVFB_PID=""
 
-# Returns 0 if a usable X server is already accessible (physical or pre-existing virtual),
-# returns 1 if we need to start our own Xvfb.
-detect_display() {
-    [ "${VIRTUAL_DISPLAY:-false}" = "true" ] && return 1
+# Probes each component of the display stack and logs the result of each check.
+# Returns 0 if a usable host X server is accessible, 1 if Xvfb is needed.
+detect_host_display() {
+    local display_num socket xhost_out xhost_rc
 
-    # If DISPLAY is set, check whether the X11 socket for that display exists.
-    # The /tmp/.X11-unix directory is bind-mounted from the host, so sockets
-    # created by a host-side Xvfb are visible here.
-    if [ -n "${DISPLAY}" ]; then
-        local display_num="${DISPLAY##*:}"
-        display_num="${display_num%%.*}"
-        [ -S "/tmp/.X11-unix/X${display_num}" ] && return 0
-    fi
-
-    # Fallback: check for a connected DRM output (physical monitor).
     if [ -d "/sys/class/drm" ]; then
-        for status_file in /sys/class/drm/card*/status; do
-            [ -f "$status_file" ] && [ "$(cat "$status_file" 2>/dev/null)" = "connected" ] && return 0
-        done
+        local connected
+        connected=$(grep -rl "^connected$" /sys/class/drm/card*/status 2>/dev/null | head -1)
+        if [ -n "$connected" ]; then
+            echo "  DRM: physical output connected (${connected%/status})"
+        else
+            echo "  DRM: no physical output detected"
+        fi
     fi
 
-    return 1
+    if [ -z "${DISPLAY:-}" ]; then
+        echo "  DISPLAY: not set — no host display was forwarded into the container"
+        return 1
+    fi
+    echo "  DISPLAY: ${DISPLAY}"
+
+    display_num="${DISPLAY##*:}"
+    display_num="${display_num%%.*}"
+    socket="/tmp/.X11-unix/X${display_num}"
+
+    if [ ! -S "${socket}" ]; then
+        echo "  X11 socket: ${socket} not found"
+        return 1
+    fi
+    echo "  X11 socket: ${socket} found"
+
+    if command -v xhost >/dev/null 2>&1; then
+        xhost_out=$(DISPLAY="${DISPLAY}" xhost 2>&1)
+        xhost_rc=$?
+        if [ "${xhost_rc}" -ne 0 ]; then
+            echo "  xhost: failed (rc=${xhost_rc}) — ${xhost_out}"
+            return 1
+        fi
+        echo "  xhost: accessible"
+    else
+        echo "  xhost: not available, skipping access check"
+    fi
+
+    return 0
 }
 
-if detect_display; then
-    ACTIVE_DISPLAY="${DISPLAY:-:0}"
-    echo "Display detected, using DISPLAY=${ACTIVE_DISPLAY}"
+echo "Detecting display..."
+ACTIVE_DISPLAY=""
+USE_XVFB=0
+
+if detect_host_display; then
+    if [ "${VIRTUAL_DISPLAY:-false}" = "true" ]; then
+        echo "  Host display available but VIRTUAL_DISPLAY=true — using Xvfb"
+        USE_XVFB=1
+    else
+        ACTIVE_DISPLAY="${DISPLAY}"
+        echo "  Using host display: DISPLAY=${ACTIVE_DISPLAY}"
+    fi
 else
-    echo "No display detected, starting virtual display on :99..."
+    echo "  No usable host display — starting Xvfb on :99"
+    USE_XVFB=1
+fi
+
+if [ "${USE_XVFB}" = "1" ]; then
     Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset >/dev/null 2>&1 &
     XVFB_PID=$!
-    echo "Virtual display started (PID: $XVFB_PID)"
+    echo "Virtual display started (PID: ${XVFB_PID})"
     sleep 2
     ACTIVE_DISPLAY=":99"
 fi
+
 export DISPLAY="${ACTIVE_DISPLAY}"
-echo "export DISPLAY=${ACTIVE_DISPLAY}" > /tmp/.adore_display
 
 # === RSYSLOG SETUP ===
 export RSYSLOG_PROTOCOL="${RSYSLOG_PROTOCOL:-udp}"

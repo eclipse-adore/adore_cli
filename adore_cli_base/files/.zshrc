@@ -5,8 +5,7 @@ if [[ $- != *i* ]] || [[ -z "$PS1" ]] || [[ -n "$DOCKER_EXEC_NON_INTERACTIVE" ]]
         source /tmp/adore/setup.sh 2>/dev/null
     fi
     if [[ -z "${DISPLAY}" ]]; then
-        [ -f /tmp/.adore_display ] && source /tmp/.adore_display 2>/dev/null || \
-            { pgrep -f "Xvfb.*:99" >/dev/null 2>&1 && export DISPLAY=:99; }
+        export DISPLAY=:99
     fi
     return 0
 fi

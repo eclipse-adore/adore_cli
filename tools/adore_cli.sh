@@ -18,11 +18,8 @@ set -euo pipefail
 SCRIPT_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 echoerr (){ printf "%s" "$@" >&2;}
 exiterr (){ echoerr "$@"; exit 1;}
-SCRIPT_DIRECTORY="/tmp/adore/tools/adore_cli/tools"
-if pgrep -f "Xvfb.*:99" > /dev/null 2>&1; then
+if [ -z "${DISPLAY:-}" ]; then
     export DISPLAY=:99
-else
-    export DISPLAY=${DISPLAY:-:0}
 fi
 
 

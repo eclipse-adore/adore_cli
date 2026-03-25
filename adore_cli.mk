@@ -70,25 +70,26 @@ GID      ?= $(USER_GID)
 
 DISPLAY ?=
 
-# Determine whether the container should use the host X server or an internal Xvfb.
-# Priority:
-#   1. VIRTUAL_DISPLAY=true in adore_cli.env  → always use Xvfb inside the container
-#   2. xhost available AND X11 socket present for $DISPLAY → forward the host display
-#   3. Otherwise (no xhost, no socket, or no DISPLAY)  → use Xvfb inside the container
-DISPLAY_DOCKER_ARG := $(shell \
+# Detect whether the host has an accessible X display to forward into the container.
+# Checks (in order): VIRTUAL_DISPLAY=true in env forces virtual; xhost present + DISPLAY set
+# + X11 socket exists enables forwarding.  When forwarding is not possible the variable is
+# left empty — entrypoint.sh detects the situation independently and starts Xvfb itself.
+# This avoids passing VIRTUAL_DISPLAY=true as a docker -e arg, which would be clobbered by
+# the set -a / VIRTUAL_DISPLAY=false in adore_cli.env when the env file is sourced inside
+# the container.
+_HOST_DISPLAY_NUM := $(shell printf '%s' '$(DISPLAY)' | sed 's/.*://' | cut -d. -f1)
+_HOST_X11_SOCKET  := /tmp/.X11-unix/X$(_HOST_DISPLAY_NUM)
+
+_FORWARD_DISPLAY := $(shell \
     source "$(ADORE_CLI_MAKEFILE_PATH)/adore_cli.env" 2>/dev/null; \
-    if [ "$${VIRTUAL_DISPLAY:-false}" = "true" ]; then \
-        printf -- '-e VIRTUAL_DISPLAY=true'; \
+    if [ "$${VIRTUAL_DISPLAY:-false}" = "true" ]; then echo false; \
     elif command -v xhost >/dev/null 2>&1 \
         && [ -n "$(DISPLAY)" ] \
-        && [ -S "/tmp/.X11-unix/X$$(printf '%s' '$(DISPLAY)' | sed 's/.*://' | cut -d. -f1)" ]; then \
-        printf -- '-e DISPLAY=$(DISPLAY)'; \
-    else \
-        printf -- '-e VIRTUAL_DISPLAY=true'; \
-    fi)
+        && [ -S "$(_HOST_X11_SOCKET)" ]; then echo true; \
+    else echo false; fi)
 
-# Only mount /tmp/.X11-unix when it exists on the host (absent in headless/CI environments).
-X11_UNIX_MOUNT := $(if $(wildcard /tmp/.X11-unix),-v /tmp/.X11-unix:/tmp/.X11-unix,)
+DISPLAY_DOCKER_ARG := $(if $(filter true,$(_FORWARD_DISPLAY)),-e DISPLAY=$(DISPLAY),)
+X11_UNIX_MOUNT     := $(if $(filter true,$(_FORWARD_DISPLAY)),$(if $(wildcard /tmp/.X11-unix),-v /tmp/.X11-unix:/tmp/.X11-unix,),)
 
 # === IMAGE TAGS ===
 # core:  tied to the adore_cli commit (changes when ROS layer or core packages change)
@@ -196,8 +197,12 @@ _build_base: check_cross_compile_deps
 	        ${ADORE_CLI_MAKEFILE_PATH}/adore_cli_base; \
 	fi
 
+.PHONY: _gather
+_gather:
+	@cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli && make gather
+
 .PHONY: _build_user
-_build_user: check_cross_compile_deps
+_build_user: check_cross_compile_deps _gather
 	@echo "Building user: ${ADORE_CLI_IMAGE}"
 	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
 	    docker buildx build --builder=default --platform=$(DOCKER_PLATFORM) --load \
@@ -247,8 +252,7 @@ _ensure_user: _ensure_base
 	        docker tag "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
 	    ( docker pull "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_IMAGE}" 2>/dev/null && \
 	        docker tag "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_IMAGE}" "${ADORE_CLI_IMAGE}" ) || \
-	    ( cd ${ADORE_CLI_MAKEFILE_PATH}/adore_cli && make gather && \
-	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user ); \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user; \
 	else echo "✓ User: ${ADORE_CLI_IMAGE}"; fi
 
 # === MAIN TARGETS ===
@@ -296,7 +300,6 @@ _execute_environment_action:
 	    -e ADORE_CLI_BASE_IMAGE=${ADORE_CLI_BASE_IMAGE} \
 	    -e ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME} \
 	    -e ROS_DISTRO=${ROS_DISTRO} \
-	    -e DISPLAY=${DISPLAY} \
 	    ${ADORE_CLI_CONTAINER_NAME} \
 	    /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true
 	@echo "Detached. Container still running. Use 'make cli' to reattach or 'make stop' to stop."
@@ -351,20 +354,24 @@ build_adore_cli: check_cross_compile_deps ## Build all three layers
 
 .PHONY: rebuild_force
 rebuild_force: ## Force rebuild all layers from scratch
-	@docker rmi ${ADORE_CLI_IMAGE}      2>/dev/null || true
-	@docker rmi ${ADORE_CLI_BASE_IMAGE} 2>/dev/null || true
-	@docker rmi ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk build_adore_cli
+	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk rebuild_from_layer LAYER=core
 
 .PHONY: rebuild_from_layer
-rebuild_from_layer: ## Rebuild from LAYER=core|base|user
+rebuild_from_layer: check_cross_compile_deps ## Rebuild from LAYER=core|base|user (no registry pull)
 	@case "$(LAYER)" in \
-	    core) docker rmi ${ADORE_CLI_IMAGE} ${ADORE_CLI_BASE_IMAGE} ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true ;; \
-	    base) docker rmi ${ADORE_CLI_IMAGE} ${ADORE_CLI_BASE_IMAGE} 2>/dev/null || true ;; \
-	    user) docker rmi ${ADORE_CLI_IMAGE} 2>/dev/null || true ;; \
+	    core) \
+	        docker rmi ${ADORE_CLI_IMAGE} ${ADORE_CLI_BASE_IMAGE} ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true; \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core _build_base _build_user ;; \
+	    base) \
+	        docker rmi ${ADORE_CLI_IMAGE} ${ADORE_CLI_BASE_IMAGE} 2>/dev/null || true; \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_base _build_user ;; \
+	    user) \
+	        docker rmi ${ADORE_CLI_IMAGE} 2>/dev/null || true; \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_user ;; \
 	    *) echo "ERROR: LAYER must be core, base, or user"; exit 1 ;; \
 	esac
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk build_adore_cli
+	@bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" save \
+	    "${ADORE_CLI_CORE_TAG}" "${ADORE_CLI_BASE_TAG}" "${ADORE_CLI_USER_TAG}" 2>/dev/null || true
 
 # === REGISTRY ===
 .PHONY: clean_adore_cli
@@ -383,13 +390,21 @@ clean_tag_history: ## Clear tag history so next build starts fresh
 
 .PHONY: push_core_image
 push_core_image: ## Push core image to registry
-	docker tag  "${ADORE_CLI_CORE_IMAGE}" "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CORE_IMAGE}"
-	docker push "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CORE_IMAGE}"
+	@if [ "$(PARENT_IS_ADORE_CLI)" = "true" ]; then \
+	    docker tag  "${ADORE_CLI_CORE_IMAGE}" "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
+	    docker push "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
+	else \
+	    echo "ERROR: push_core_image must be run from the adore_cli repo (PARENT_REPO=${PARENT_REPO})"; exit 1; \
+	fi
 
 .PHONY: push_base_image
 push_base_image: ## Push base image to registry
-	docker tag  "${ADORE_CLI_BASE_IMAGE}" "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"
-	docker push "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"
+	@if [ "$(PARENT_IS_ADORE_CLI)" = "true" ]; then \
+	    docker tag  "${ADORE_CLI_BASE_IMAGE}" "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
+	    docker push "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
+	else \
+	    echo "ERROR: push_base_image must be run from the adore_cli repo (PARENT_REPO=${PARENT_REPO})"; exit 1; \
+	fi
 
 .PHONY: push_user_image
 push_user_image: ## Push user image to registry
@@ -505,7 +520,6 @@ adore_cli_attach:
 	    -e ADORE_CLI_BASE_IMAGE=${ADORE_CLI_BASE_IMAGE} \
 	    -e ADORE_CLI_CONTAINER_NAME=${ADORE_CLI_CONTAINER_NAME} \
 	    -e ROS_DISTRO=${ROS_DISTRO} \
-	    -e DISPLAY=${DISPLAY} \
 	    ${ADORE_CLI_CONTAINER_NAME} \
 	    /bin/zsh -c "ADORE_CLI_WORKING_DIRECTORY=${ADORE_CLI_WORKING_DIRECTORY} bash /tmp/adore_cli/tools/adore_cli.sh" || true
 

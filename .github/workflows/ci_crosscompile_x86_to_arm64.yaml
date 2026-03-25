@@ -59,7 +59,7 @@ jobs:
       - name: Build
         run: |
           df -h
-          make build
+          make rebuild_from_layer LAYER=core
           make save_docker_images
 
       - name: CI Test
@@ -70,21 +70,9 @@ jobs:
       - name: Login to GitHub Container Registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Tag Docker Images
+      - name: Push Images to Registry
         run: |
-          IMAGES=$(make images_adore_cli)
-          REPO=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          for IMAGE in $IMAGES; do
-            docker tag $IMAGE ghcr.io/${REPO}/$IMAGE
-          done
-
-      - name: Push Docker Images
-        run: |
-          IMAGES=$(make images_adore_cli)
-          REPO=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          for IMAGE in $IMAGES; do
-            docker push ghcr.io/${REPO}/$IMAGE
-          done
+          make push_images
 
       - name: Upload Logs
         uses: actions/upload-artifact@v4
