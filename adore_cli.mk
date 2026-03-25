@@ -389,27 +389,20 @@ clean_tag_history: ## Clear tag history so next build starts fresh
 	@rm -f "${ADORE_CLI_LOG_DIR}/last_successful_env"
 
 .PHONY: push_core_image
-push_core_image: ## Push core image to registry
-	@if [ "$(PARENT_IS_ADORE_CLI)" = "true" ]; then \
-	    docker tag  "${ADORE_CLI_CORE_IMAGE}" "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
-	    docker push "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CORE_IMAGE}"; \
-	else \
-	    echo "ERROR: push_core_image must be run from the adore_cli repo (PARENT_REPO=${PARENT_REPO})"; exit 1; \
-	fi
+push_core_image: ## Push core image to the adore_cli registry
+	docker tag  "${ADORE_CLI_CORE_IMAGE}" "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CORE_IMAGE}"
+	docker push "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_CORE_IMAGE}"
 
 .PHONY: push_base_image
-push_base_image: ## Push base image to registry
-	@if [ "$(PARENT_IS_ADORE_CLI)" = "true" ]; then \
-	    docker tag  "${ADORE_CLI_BASE_IMAGE}" "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
-	    docker push "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"; \
-	else \
-	    echo "ERROR: push_base_image must be run from the adore_cli repo (PARENT_REPO=${PARENT_REPO})"; exit 1; \
-	fi
+push_base_image: ## Push base image to the adore_cli registry
+	docker tag  "${ADORE_CLI_BASE_IMAGE}" "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"
+	docker push "ghcr.io/${ADORE_CLI_REPO}/${ADORE_CLI_BASE_IMAGE}"
 
 .PHONY: push_user_image
-push_user_image: ## Push user image to registry
-	docker tag  "${ADORE_CLI_IMAGE}" "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}"
-	docker push "ghcr.io/${PARENT_REPO}/${ADORE_CLI_IMAGE}"
+push_user_image: ## Push user image to the parent repo registry (or adore_cli registry if no parent)
+	$(eval _USER_IMAGE_REPO := $(if $(filter-out $(ADORE_CLI_REPO),$(PARENT_REPO)),$(PARENT_REPO),$(ADORE_CLI_REPO)))
+	docker tag  "${ADORE_CLI_IMAGE}" "ghcr.io/${_USER_IMAGE_REPO}/${ADORE_CLI_IMAGE}"
+	docker push "ghcr.io/${_USER_IMAGE_REPO}/${ADORE_CLI_IMAGE}"
 
 .PHONY: push_images
 push_images: push_core_image push_base_image push_user_image ## Push all images to registry
