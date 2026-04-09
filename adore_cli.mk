@@ -266,10 +266,8 @@ _cli_attach:
 	IMAGE_EXISTS=$$(docker image inspect "adore_cli:$$CURRENT_TAG" >/dev/null 2>&1 && echo "true" || echo "false"); \
 	if [ "$$IMAGE_EXISTS" = "true" ]; then \
 	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
-	elif [ -n "$$LAST_TAG" ] && [ "$$LAST_TAG" != "$$CURRENT_TAG" ]; then \
-	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "$$LAST_TAG" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
 	else \
-	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
+	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "$$LAST_TAG" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
 	fi
 
 .PHONY: _execute_environment_action
