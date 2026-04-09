@@ -11,6 +11,7 @@ SOURCE_DIRECTORY   ?= ${ADORE_CLI_MAKEFILE_PATH}
 VENDOR_PATH        ?= ${SOURCE_DIRECTORY}/vendor
 ADORE_CLI_LOG_DIR  ?= ${SOURCE_DIRECTORY}/.log/.adore_cli
 ADORE_CLI_LOG_DIRECTORY := ${ADORE_CLI_LOG_DIR}
+ADORE_CLI_ACTIVE_CONTAINER_FILE := ${ADORE_CLI_LOG_DIR}/active_container
 
 PARENT_IS_ADORE_CLI := $(shell [ "${SOURCE_DIRECTORY}" = "${ADORE_CLI_MAKEFILE_PATH}" ] && echo "true" || echo "false")
 
@@ -261,13 +262,23 @@ cli: docker_host_context_check _cli_attach ## Start or attach to ADORe CLI
 
 .PHONY: _cli_attach
 _cli_attach:
-	@LAST_TAG=$$(bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" get_last 2>/dev/null || echo ""); \
-	CURRENT_TAG="${ADORE_CLI_USER_TAG}"; \
-	IMAGE_EXISTS=$$(docker image inspect "adore_cli:$$CURRENT_TAG" >/dev/null 2>&1 && echo "true" || echo "false"); \
-	if [ "$$IMAGE_EXISTS" = "true" ]; then \
-	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
+	@ACTIVE_CONTAINER=$$(cat "${ADORE_CLI_ACTIVE_CONTAINER_FILE}" 2>/dev/null || echo ""); \
+	if [ -n "$$ACTIVE_CONTAINER" ] && docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^$$ACTIVE_CONTAINER$$"; then \
+	    ACTIVE_TAG=$$(echo "$$ACTIVE_CONTAINER" | sed 's/^adore_cli_//; s/_$(shell whoami)$$//'); \
+	    echo "✓ Attaching to active session: $$ACTIVE_CONTAINER"; \
+	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action \
+	        ADORE_CLI_USER_TAG="$$ACTIVE_TAG" \
+	        ADORE_CLI_IMAGE="adore_cli:$$ACTIVE_TAG" \
+	        ADORE_CLI_CONTAINER_NAME="$$ACTIVE_CONTAINER"; \
 	else \
-	    bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "$$LAST_TAG" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
+	    LAST_TAG=$$(bash "${ADORE_CLI_MAKEFILE_PATH}/tools/tag_history_manager.sh" get_last 2>/dev/null || echo ""); \
+	    CURRENT_TAG="${ADORE_CLI_USER_TAG}"; \
+	    IMAGE_EXISTS=$$(docker image inspect "adore_cli:$$CURRENT_TAG" >/dev/null 2>&1 && echo "true" || echo "false"); \
+	    if [ "$$IMAGE_EXISTS" = "true" ]; then \
+	        make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action; \
+	    else \
+	        bash "${ADORE_CLI_MAKEFILE_PATH}/tools/cli_prompt.sh" "$$LAST_TAG" "$$CURRENT_TAG" "${ADORE_CLI_MAKEFILE_PATH}"; \
+	    fi; \
 	fi
 
 .PHONY: _execute_environment_action
@@ -281,6 +292,7 @@ _execute_environment_action:
 	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_setup; \
 	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk adore_cli_start; \
 	fi
+	@echo "${ADORE_CLI_CONTAINER_NAME}" > "${ADORE_CLI_ACTIVE_CONTAINER_FILE}"
 	@echo "Type 'exit' to detach  |  'make stop' to stop the container"
 	@echo "Waiting for container user to be ready..."
 	@timeout 15 bash -c \
@@ -496,8 +508,11 @@ zenoh_stop:
 
 .PHONY: adore_cli_teardown
 adore_cli_teardown:
-	@docker stop ${ADORE_CLI_CONTAINER_NAME} 2>/dev/null || true
-	@docker rm -f ${ADORE_CLI_CONTAINER_NAME} 2>/dev/null || true
+	@ACTIVE_CONTAINER=$$(cat "${ADORE_CLI_ACTIVE_CONTAINER_FILE}" 2>/dev/null || echo ""); \
+	TARGET=$${ACTIVE_CONTAINER:-${ADORE_CLI_CONTAINER_NAME}}; \
+	docker stop "$$TARGET" 2>/dev/null || true; \
+	docker rm -f "$$TARGET" 2>/dev/null || true
+	@rm -f "${ADORE_CLI_ACTIVE_CONTAINER_FILE}"
 	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk zenoh_stop
 	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk disable_x11_forwarding
 
