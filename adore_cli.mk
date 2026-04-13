@@ -3,6 +3,7 @@ ifeq ($(filter adore_cli.mk, $(notdir $(MAKEFILE_LIST))), adore_cli.mk)
 SHELL     := /bin/bash
 MAKEFLAGS += --warn-undefined-variables --no-builtin-rules
 .NOTPARALLEL:
+cmd ?=
 
 ADORE_CLI_MAKEFILE_PATH := $(shell dirname "$(realpath $(lastword $(MAKEFILE_LIST)))")
 
