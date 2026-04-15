@@ -1,5 +1,6 @@
 # Bare minimum ROS2 runtime + communication layer.
 ros-${ROS_DISTRO}-ros-base
+ros-${ROS_DISTRO}-fastrtps
 ros-${ROS_DISTRO}-rosbridge-suite
 ros-${ROS_DISTRO}-rosbridge-msgs
 ros-${ROS_DISTRO}-foxglove-bridge

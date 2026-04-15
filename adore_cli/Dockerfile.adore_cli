@@ -16,9 +16,7 @@ COPY context/requirements.system /tmp/build/
 COPY context/requirements.pip3   /tmp/build/
 COPY context/vendor/             /tmp/build/vendor/
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean && \
+RUN rm -f /etc/apt/apt.conf.d/docker-clean && \
     if [ -s /tmp/build/requirements.ppa ]; then \
         apt-get install -y --no-install-recommends software-properties-common && \
         grep -v '^\s*#' /tmp/build/requirements.ppa | grep -v '^\s*$' | \

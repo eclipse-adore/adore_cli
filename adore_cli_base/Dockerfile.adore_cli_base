@@ -15,15 +15,12 @@ LABEL org.adore.image-type="base" \
 COPY files/requirements.adore_cli_base.system /tmp/
 COPY files/requirements.adore_cli_base.pip3   /tmp/
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean && \
+RUN rm -f /etc/apt/apt.conf.d/docker-clean && \
     apt-get update && \
     grep -v '^\s*#' /tmp/requirements.adore_cli_base.system | grep -v '^\s*$' | \
     envsubst | xargs -r apt-get install -y --no-install-recommends
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    grep -v '^\s*#' /tmp/requirements.adore_cli_base.pip3 | grep -v '^\s*$' | \
+RUN grep -v '^\s*#' /tmp/requirements.adore_cli_base.pip3 | grep -v '^\s*$' | \
     xargs -r pip install --break-system-packages
 
 RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git /usr/share/oh-my-zsh && \
