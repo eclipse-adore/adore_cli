@@ -14,10 +14,43 @@ CROSS_COMPILE   ?= false
 include ../adore_cli.mk
 include ${ADORE_CLI_MAKEFILE_PATH}/make_gadgets/make_gadgets.mk
 
+PATCHES          := $(sort $(wildcard $(ROOT_DIR)/patches/*.patch))
+DOCKERFILE       := $(ROOT_DIR)/Dockerfile.adore_cli_core
+BUILD_DOCKERFILE := $(if $(PATCHES),$(DOCKERFILE).patched,$(DOCKERFILE))
+
+.PHONY: patch
+patch:
+ifneq ($(PATCHES),)
+	@cp $(DOCKERFILE) $(DOCKERFILE).patched
+	@for p in $(PATCHES); do \
+	    echo "Applying patch: $$(basename $$p)"; \
+	    patch -p1 $(DOCKERFILE).patched < "$$p" || exit 1; \
+	done
+endif
+
 .PHONY: build
-build:
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _build_core
+build: patch check_cross_compile_deps
+	@if [ "$(CROSS_COMPILE)" = "true" ]; then \
+	    docker buildx build --builder=default --platform=$(DOCKER_PLATFORM) --load \
+	        --build-arg ROS_DISTRO=$(ROS_DISTRO) \
+	        --build-arg OS_CODE_NAME=$(OS_CODE_NAME) \
+	        --build-arg ARCH=$(ARCH) \
+	        --build-arg SHORT_HASH=$(ADORE_CLI_SHORT_HASH) \
+	        -t $(ADORE_CLI_CORE_IMAGE) \
+	        -f $(BUILD_DOCKERFILE) \
+	        $(ROOT_DIR); \
+	else \
+	    docker build --network host \
+	        --build-arg ROS_DISTRO=$(ROS_DISTRO) \
+	        --build-arg OS_CODE_NAME=$(OS_CODE_NAME) \
+	        --build-arg ARCH=$(ARCH) \
+	        --build-arg SHORT_HASH=$(ADORE_CLI_SHORT_HASH) \
+	        -t $(ADORE_CLI_CORE_IMAGE) \
+	        -f $(BUILD_DOCKERFILE) \
+	        $(ROOT_DIR); \
+	fi
 
 .PHONY: clean
 clean:
-	@docker rmi ${ADORE_CLI_CORE_IMAGE} 2>/dev/null || true
+	@docker rmi $(ADORE_CLI_CORE_IMAGE) 2>/dev/null || true
+	@rm -f $(DOCKERFILE).patched

@@ -26,23 +26,13 @@ RUN mkdir -p /etc/apt/keyrings && \
     echo "deb [signed-by=/etc/apt/keyrings/zenoh-public-key.gpg] https://download.eclipse.org/zenoh/debian-repo/ /" \
         > /etc/apt/sources.list.d/zenoh.list
 
-#RUN rm -f /etc/apt/apt.conf.d/docker-clean && \
-#    apt-get update && \
-#    grep -v '^\s*#' /tmp/requirements.adore_cli_core.system | grep -v '^\s*$' | \
-#    envsubst | xargs -r apt-get install -y --no-install-recommends && \
-#    rm -f /etc/apt/keyrings/zenoh-public-key.gpg \
-#          /etc/apt/sources.list.d/zenoh.list && \
-#    ldconfig
-
-## The upstream ros package ros-jazzy-rmw-fastrtps-cpp is misconfigured and does not properly
-## register the installed shared libraries via debian control scripts or dpkg. 
-## This is a temporary fix until this is resolved. 
-RUN grep -v '^\s*#' /tmp/requirements.adore_cli_core.system | grep -v '^\s*$' | \
+RUN rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && \
+    grep -v '^\s*#' /tmp/requirements.adore_cli_core.system | grep -v '^\s*$' | \
     envsubst | xargs -r apt-get install -y --no-install-recommends && \
     rm -f /etc/apt/keyrings/zenoh-public-key.gpg \
-          /etc/apt/sources.list.d/zenoh.list && \
-    echo "/opt/ros/jazzy/lib" > /etc/ld.so.conf.d/ros-jazzy.conf && \
-    ldconfig 
+          /etc/apt/sources.list.d/zenoh.list
 
+RUN apt-get update
 
 WORKDIR /tmp/adore

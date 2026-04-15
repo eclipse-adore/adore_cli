@@ -1,4 +1,4 @@
-# === Runtime shell artifacts ===
+#=== Runtime shell artifacts ===
 .zsh_history
 .bash_history
 .zshrc
@@ -22,6 +22,7 @@ build/
 
 # === Generated gather/requirements artifacts ===
 adore_cli/context/
+adore_cli_core/Dockerfile.adore_cli_core.patched
 
 # === Vendor build output (keep vendor/README.md) ===
 vendor/build/

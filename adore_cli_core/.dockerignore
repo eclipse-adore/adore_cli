@@ -1,2 +1,3 @@
 Makefile
 Dockerfile.adore_cli_core
+Dockerfile.adore_cli_core.patched
