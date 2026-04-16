@@ -6,7 +6,9 @@ ARG ROS_DISTRO=jazzy
 ARG OS_CODE_NAME=noble
 ARG ARCH
 ARG SHORT_HASH
+#ARG APT_MIRROR=http://archive.ubuntu.com/ubuntu
 ARG APT_MIRROR=https://ftp.uni-stuttgart.de/ubuntu
+ARG APT_MIRROR_PORTS=http://ports.ubuntu.com/ubuntu-ports
 
 ENV ROS_DISTRO=${ROS_DISTRO}
 ENV OS_CODE_NAME=${OS_CODE_NAME}
@@ -18,17 +20,22 @@ LABEL org.adore.image-type="core" \
 COPY requirements.adore_cli_core.system /tmp/
 
 RUN if [ -n "${APT_MIRROR}" ]; then \
-        sed -i \
-            -e "s|http://archive.ubuntu.com/ubuntu|${APT_MIRROR}|g" \
-            -e "s|http://ports.ubuntu.com/ubuntu-ports|${APT_MIRROR}|g" \
-            -e "/^Suites:/s/ ${OS_CODE_NAME}-backports//" \
-            /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null \
-        || sed -i \
-            -e "s|http://archive.ubuntu.com/ubuntu|${APT_MIRROR}|g" \
-            -e "s|http://ports.ubuntu.com/ubuntu-ports|${APT_MIRROR}|g" \
-            -e "/${OS_CODE_NAME}-backports/d" \
-            /etc/apt/sources.list 2>/dev/null \
-        || true; \
+        case "${ARCH}" in \
+            aarch64|arm64) _mirror="${APT_MIRROR_PORTS}" ;; \
+            *) _mirror="${APT_MIRROR}" ;; \
+        esac; \
+        if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+            sed -i \
+                -e "s|^URIs:.*|URIs: ${_mirror}|" \
+                -e "/^Suites:/s/ ${OS_CODE_NAME}-backports//" \
+                /etc/apt/sources.list.d/ubuntu.sources; \
+        elif [ -f /etc/apt/sources.list ]; then \
+            sed -i \
+                -e "s|^deb [^ ]*|deb ${_mirror}|" \
+                -e "s|^deb-src [^ ]*|deb-src ${_mirror}|" \
+                -e "/${OS_CODE_NAME}-backports/d" \
+                /etc/apt/sources.list; \
+        fi; \
     fi
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean && \
