@@ -6,6 +6,7 @@ ARG ROS_DISTRO=jazzy
 ARG OS_CODE_NAME=noble
 ARG ARCH
 ARG SHORT_HASH
+ARG APT_MIRROR=https://ftp.uni-stuttgart.de/ubuntu
 
 ENV ROS_DISTRO=${ROS_DISTRO}
 ENV OS_CODE_NAME=${OS_CODE_NAME}
@@ -15,6 +16,20 @@ LABEL org.adore.image-type="core" \
       org.adore.commit="${SHORT_HASH}"
 
 COPY requirements.adore_cli_core.system /tmp/
+
+RUN if [ -n "${APT_MIRROR}" ]; then \
+        sed -i \
+            -e "s|http://archive.ubuntu.com/ubuntu|${APT_MIRROR}|g" \
+            -e "s|http://ports.ubuntu.com/ubuntu-ports|${APT_MIRROR}|g" \
+            -e "/^Suites:/s/ ${OS_CODE_NAME}-backports//" \
+            /etc/apt/sources.list.d/ubuntu.sources 2>/dev/null \
+        || sed -i \
+            -e "s|http://archive.ubuntu.com/ubuntu|${APT_MIRROR}|g" \
+            -e "s|http://ports.ubuntu.com/ubuntu-ports|${APT_MIRROR}|g" \
+            -e "/${OS_CODE_NAME}-backports/d" \
+            /etc/apt/sources.list 2>/dev/null \
+        || true; \
+    fi
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean && \
     apt-get update && \

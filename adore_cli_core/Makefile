@@ -7,6 +7,7 @@ ROOT_DIR := $(shell dirname "$(realpath $(firstword $(MAKEFILE_LIST)))")
 .EXPORT_ALL_VARIABLES:
 DOCKER_BUILDKIT ?= 1
 ROS_DISTRO      ?= jazzy
+APT_MIRROR      ?= https://ftp.uni-stuttgart.de/ubuntu
 ARCH            ?= $(shell uname -m)
 DOCKER_PLATFORM ?= linux/$(ARCH)
 CROSS_COMPILE   ?= false
@@ -36,6 +37,7 @@ build: patch check_cross_compile_deps
 	        --build-arg OS_CODE_NAME=$(OS_CODE_NAME) \
 	        --build-arg ARCH=$(ARCH) \
 	        --build-arg SHORT_HASH=$(ADORE_CLI_SHORT_HASH) \
+	        --build-arg APT_MIRROR=$(APT_MIRROR) \
 	        -t $(ADORE_CLI_CORE_IMAGE) \
 	        -f $(BUILD_DOCKERFILE) \
 	        $(ROOT_DIR); \
@@ -45,6 +47,7 @@ build: patch check_cross_compile_deps
 	        --build-arg OS_CODE_NAME=$(OS_CODE_NAME) \
 	        --build-arg ARCH=$(ARCH) \
 	        --build-arg SHORT_HASH=$(ADORE_CLI_SHORT_HASH) \
+	        --build-arg APT_MIRROR=$(APT_MIRROR) \
 	        -t $(ADORE_CLI_CORE_IMAGE) \
 	        -f $(BUILD_DOCKERFILE) \
 	        $(ROOT_DIR); \

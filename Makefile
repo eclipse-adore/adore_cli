@@ -21,7 +21,7 @@ include ${ROOT_DIR}/package.mk
 include ${ADORE_CLI_MAKEFILE_PATH}/ci_teststand/ci_teststand.mk
 
 .PHONY: build
-build: clean build_adore_cli ## Build all ADORe CLI layers
+build: build_adore_cli ## Build all ADORe CLI layers
 
 .PHONY: debug_run
 debug_run:
