@@ -36,6 +36,11 @@ else
     useradd --create-home --uid "$TARGET_UID" --gid "$TARGET_GID" --shell /bin/zsh "$TARGET_USER" 2>/dev/null || true
 fi
 
+if [ -n "${TZ:-}" ]; then
+    ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime 2>/dev/null || true
+    echo "${TZ}" > /etc/timezone 2>/dev/null || true
+fi
+
 HOME_DIR=$(getent passwd "$TARGET_UID" | cut -d: -f6)
 HOME_DIR="${HOME_DIR:-/home/$TARGET_USER}"
 mkdir -p "$HOME_DIR"
@@ -206,7 +211,10 @@ if [ -f /opt/adore_venv/bin/activate ]; then
     export PYTHONPATH="/opt/ros/${ROS_DISTRO}/lib/python${PYVER}/site-packages:/opt/adore_venv/lib/python${PYVER}/site-packages:${PYTHONPATH}"
 fi
 
-# Keep container alive. Interactive sessions attach via:
-#   docker exec --user <uid>:<gid> -it <container> /bin/zsh
+if [ "$#" -gt 0 ]; then
+    exec gosu "${TARGET_UID}:${TARGET_GID}" "$@"
+fi
+
+# Keep container alive — interactive sessions attach via docker exec --user
 sleep infinity &
 wait $!

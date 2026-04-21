@@ -1,6 +1,9 @@
 # Dev environment built on top of adore_cli_core.
 # Shell, build tools, x11, tracing, diagnostics.
 
+gosu
+tzdata
+
 # Shell / system
 zsh
 sudo

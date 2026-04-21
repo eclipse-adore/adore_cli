@@ -451,6 +451,7 @@ adore_cli_start:
 	    --pid host \
 	    --platform ${DOCKER_PLATFORM} \
 	    -e HOSTNAME=${HOSTNAME} \
+	    -e TZ="$(shell cat /etc/timezone 2>/dev/null || timedatectl show --property=Timezone --value 2>/dev/null || echo 'UTC')" \
 	    -e SOURCE_DIRECTORY=${SOURCE_DIRECTORY} \
 	    -e USER=${USER} \
 	    -e UID=${USER_UID} \
