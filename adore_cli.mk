@@ -438,9 +438,20 @@ adore_cli_setup:
 
 .PHONY: adore_cli_start
 adore_cli_start:
-	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
-	    echo "ERROR: Image not found: ${ADORE_CLI_IMAGE}. Run 'make build' first."; exit 1; \
-	fi
+	@bash -c '\
+	if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
+	    echo "ERROR: Image not found: ${ADORE_CLI_IMAGE}. Run '\''make build'\'' first."; \
+	    exit 1; \
+	fi; \
+	if docker ps --format "{{.Names}}" | grep -Fxq "${ADORE_CLI_CONTAINER_NAME}"; then \
+	    echo "INFO: Container '\''${ADORE_CLI_CONTAINER_NAME}'\'' is already running."; \
+	    echo "Run '\''make cli'\'' to attach to it."; \
+	    exit 0; \
+	fi; \
+	if docker ps -a --format "{{.Names}}" | grep -Fxq "${ADORE_CLI_CONTAINER_NAME}"; then \
+	    echo "INFO: Removing stopped container '\''${ADORE_CLI_CONTAINER_NAME}'\''..."; \
+	    docker rm ${ADORE_CLI_CONTAINER_NAME} >/dev/null; \
+	fi; \
 	docker run \
 	    --detach \
 	    --init \
@@ -451,7 +462,7 @@ adore_cli_start:
 	    --pid host \
 	    --platform ${DOCKER_PLATFORM} \
 	    -e HOSTNAME=${HOSTNAME} \
-	    -e TZ="$(shell cat /etc/timezone 2>/dev/null || timedatectl show --property=Timezone --value 2>/dev/null || echo 'UTC')" \
+	    -e TZ="$$(cat /etc/timezone 2>/dev/null || timedatectl show --property=Timezone --value 2>/dev/null || echo UTC)" \
 	    -e SOURCE_DIRECTORY=${SOURCE_DIRECTORY} \
 	    -e USER=${USER} \
 	    -e UID=${USER_UID} \
@@ -477,7 +488,9 @@ adore_cli_start:
 	    -v ${HOME}/.gitconfig:/home/${USER}/.gitconfig:ro \
 	    -v ${HOME}/.ssh:/home/${USER}/.ssh:ro \
 	    --add-host ${HOSTNAME}:127.0.0.1 \
-	    ${ADORE_CLI_IMAGE}
+	    ${ADORE_CLI_IMAGE}; \
+	'
+
 	@echo "Waiting for entrypoint to complete display setup..."
 	@timeout 30 bash -c \
 	    'until docker exec ${ADORE_CLI_CONTAINER_NAME} test -f /tmp/.adore_display 2>/dev/null; do sleep 0.5; done'
