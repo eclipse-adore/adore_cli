@@ -88,3 +88,8 @@ services:
     ipc: "host"
     pid: "host"
     restart: unless-stopped
+    volumes:
+      - ${ZENOH_CONFIG:-./zenoh_bridge_config.json5}:/tmp/zenoh_config.json5:ro
+    command: >
+      -c /tmp/zenoh_config.json5
+      ${ZENOH_REST_ENABLE:+--rest-http-port ${ZENOH_REST_PORT:-8000}}

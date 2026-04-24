@@ -502,17 +502,29 @@ zenoh_start:
 	if [ "$${ZENOH_ENABLE:-false}" = "true" ]; then \
 	    ZENOH_IMAGE="$${ZENOH_IMAGE:-eclipse/zenoh-bridge-ros2dds:latest}"; \
 	    ZENOH_CONTAINER="${ADORE_CLI_CONTAINER_NAME}_zenoh"; \
+	    ZENOH_CONFIG="$${ZENOH_CONFIG:-${ADORE_CLI_MAKEFILE_PATH}/zenoh_bridge_config.json5}"; \
 	    if docker ps --format "{{.Names}}" | grep -q "^$${ZENOH_CONTAINER}$$"; then \
 	        echo "✓ Zenoh already running: $${ZENOH_CONTAINER}"; \
 	    else \
 	        echo "Starting Zenoh bridge: $${ZENOH_IMAGE}"; \
+	        ZENOH_EXTRA_ARGS=""; \
+	        ZENOH_VOLUME_ARGS=""; \
+	        if [ -f "$${ZENOH_CONFIG}" ]; then \
+	            ZENOH_VOLUME_ARGS="-v $${ZENOH_CONFIG}:/tmp/zenoh_config.json5"; \
+	            ZENOH_EXTRA_ARGS="-c /tmp/zenoh_config.json5"; \
+	        fi; \
+	        if [ "$${ZENOH_REST_ENABLE:-false}" = "true" ]; then \
+	            ZENOH_EXTRA_ARGS="$${ZENOH_EXTRA_ARGS} --rest-http-port $${ZENOH_REST_PORT:-8000}"; \
+	        fi; \
 	        docker run --detach \
 	            --name "$${ZENOH_CONTAINER}" \
 	            --network host \
 	            --ipc host \
 	            --pid host \
 	            --restart unless-stopped \
-	            "$${ZENOH_IMAGE}"; \
+	            $${ZENOH_VOLUME_ARGS} \
+	            "$${ZENOH_IMAGE}" \
+	            $${ZENOH_EXTRA_ARGS}; \
 	    fi \
 	fi
 

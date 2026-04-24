@@ -24,9 +24,6 @@
   },
 
   plugins: {
-    rest: {
-      http_port: 8000,
-    },
     ros2dds: {
       nodename: "zenoh_bridge_ros2dds",
 
