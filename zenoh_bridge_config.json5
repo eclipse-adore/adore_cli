@@ -1,5 +1,5 @@
 {
-  mode: "router",
+  mode: "peer",
 
   // id: "aabbccdd1122334455667788aabbccdd",
 
@@ -12,13 +12,13 @@
   connect: {
     // Remote bridges or zenoh routers to connect to at startup
     endpoints: [
-      // "tcp/192.168.1.100:7447",
+      "tcp/0.0.0.0:7446",
     ],
   },
 
   scouting: {
     multicast: {
-      enabled: true,
+      enabled: false,
       autoconnect: { router: ["router"], peer: ["router", "peer"] },
     },
   },

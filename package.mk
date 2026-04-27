@@ -11,7 +11,6 @@ package: build save ## Build, save images, then produce a relocatable tar.gz in 
 	@rm -rf "$(PACKAGE_TEMP_DIR)"
 	@mkdir -p "$(PACKAGE_TEMP_DIR)/workspace/build"
 	@tar -C "$(SOURCE_DIRECTORY)" \
-	    --exclude="./build" \
 	    --exclude="./.log" \
 	    --exclude="./adore_cli/context" \
 	    -cf - . | tar -C "$(PACKAGE_TEMP_DIR)/workspace" -xf -
