@@ -93,3 +93,11 @@ services:
     command: >
       -c /tmp/zenoh_config.json5
       ${ZENOH_REST_ENABLE:+--rest-http-port ${ZENOH_REST_PORT:-8000}}
+
+  zenoh-router:
+      image: eclipse/zenoh:latest
+      container_name: zenoh-router
+      restart: always
+      ports:
+        - "7446:7447/tcp"
+        - "7446:7446/udp"

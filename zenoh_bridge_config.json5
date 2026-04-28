@@ -37,20 +37,6 @@
       // Matches ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET in the container env.
       // Options: localhost, subnet, off
       ros_automatic_discovery_range: "SUBNET",
-
-      // allow: ".*",
-      // deny: ".*/camera/image_raw",
-
-      // pub_max_frequencies: [
-      //   ".*/camera/image_raw=5",
-      //   ".*/pointcloud=10",
-      // ],
-
-      // pub_priorities: [
-      //   "/emergency_stop=1:express",
-      //   "/cmd_vel=2:express",
-      //   "/diagnostics=7",
-      // ],
     },
   },
 }
