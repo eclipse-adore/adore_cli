@@ -494,45 +494,29 @@ adore_cli_start:
 	@echo "Waiting for entrypoint to complete display setup..."
 	@timeout 30 bash -c \
 	    'until docker exec ${ADORE_CLI_CONTAINER_NAME} test -f /tmp/.adore_display 2>/dev/null; do sleep 0.5; done'
-	@make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk zenoh_start
 
-.PHONY: zenoh_start
-zenoh_start:
-	@source ${ADORE_CLI_MAKEFILE_PATH}/adore_cli.env 2>/dev/null || true; \
-	if [ "$${ZENOH_ENABLE:-false}" = "true" ]; then \
-	    ZENOH_IMAGE="$${ZENOH_IMAGE:-eclipse/zenoh-bridge-ros2dds:latest}"; \
-	    ZENOH_CONTAINER="${ADORE_CLI_CONTAINER_NAME}_zenoh"; \
-	    ZENOH_CONFIG="$${ZENOH_CONFIG:-${ADORE_CLI_MAKEFILE_PATH}/zenoh_bridge_config.json5}"; \
-	    if docker ps --format "{{.Names}}" | grep -q "^$${ZENOH_CONTAINER}$$"; then \
-	        echo "✓ Zenoh already running: $${ZENOH_CONTAINER}"; \
-	    else \
-	        echo "Starting Zenoh bridge: $${ZENOH_IMAGE}"; \
-	        ZENOH_EXTRA_ARGS=""; \
-	        ZENOH_VOLUME_ARGS=""; \
-	        if [ -f "$${ZENOH_CONFIG}" ]; then \
-	            ZENOH_VOLUME_ARGS="-v $${ZENOH_CONFIG}:/tmp/zenoh_config.json5"; \
-	            ZENOH_EXTRA_ARGS="-c /tmp/zenoh_config.json5"; \
-	        fi; \
-	        if [ "$${ZENOH_REST_ENABLE:-false}" = "true" ]; then \
-	            ZENOH_EXTRA_ARGS="$${ZENOH_EXTRA_ARGS} --rest-http-port $${ZENOH_REST_PORT:-8000}"; \
-	        fi; \
-	        docker run --detach \
-	            --name "$${ZENOH_CONTAINER}" \
-	            --network host \
-	            --ipc host \
-	            --pid host \
-	            --restart unless-stopped \
-	            $${ZENOH_VOLUME_ARGS} \
-	            "$${ZENOH_IMAGE}" \
-	            $${ZENOH_EXTRA_ARGS}; \
-	    fi \
-	fi
+ZENOH_LOG_DIR        := ${SOURCE_DIRECTORY}/.log/zenoh
+ZENOH_ROUTER_PIDFILE := ${ZENOH_LOG_DIR}/zenoh_router.pid
+ZENOH_BRIDGE_PIDFILE := ${ZENOH_LOG_DIR}/zenoh_bridge.pid
 
 .PHONY: zenoh_stop
 zenoh_stop:
-	@ZENOH_CONTAINER="${ADORE_CLI_CONTAINER_NAME}_zenoh"; \
-	docker stop "$${ZENOH_CONTAINER}" 2>/dev/null || true; \
-	docker rm -f "$${ZENOH_CONTAINER}" 2>/dev/null || true
+	@if [ -f "${ZENOH_BRIDGE_PIDFILE}" ]; then \
+	    BRIDGE_PID=$$(cat "${ZENOH_BRIDGE_PIDFILE}"); \
+	    if kill -0 "$$BRIDGE_PID" 2>/dev/null; then \
+	        echo "Stopping zenoh bridge (pid $$BRIDGE_PID)"; \
+	        kill "$$BRIDGE_PID" 2>/dev/null || true; \
+	    fi; \
+	    rm -f "${ZENOH_BRIDGE_PIDFILE}"; \
+	fi; \
+	if [ -f "${ZENOH_ROUTER_PIDFILE}" ]; then \
+	    ROUTER_PID=$$(cat "${ZENOH_ROUTER_PIDFILE}"); \
+	    if kill -0 "$$ROUTER_PID" 2>/dev/null; then \
+	        echo "Stopping zenoh router (pid $$ROUTER_PID)"; \
+	        kill "$$ROUTER_PID" 2>/dev/null || true; \
+	    fi; \
+	    rm -f "${ZENOH_ROUTER_PIDFILE}"; \
+	fi
 
 .PHONY: adore_cli_teardown
 adore_cli_teardown:
