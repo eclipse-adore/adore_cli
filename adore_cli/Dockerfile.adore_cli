@@ -50,8 +50,9 @@ ENV VIRTUAL_ENV="/opt/adore_venv"
 RUN userdel --remove ubuntu 2>/dev/null || true
 
 COPY files/rsyslog.conf.template /etc/rsyslog.conf.template
+COPY files/rsyslog_reload.sh     /etc/rsyslog_reload.sh
 COPY files/entrypoint.sh         /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /etc/rsyslog_reload.sh /entrypoint.sh
 
 WORKDIR /tmp/adore
 ENTRYPOINT ["/entrypoint.sh"]
