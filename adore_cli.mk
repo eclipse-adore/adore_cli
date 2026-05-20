@@ -325,6 +325,9 @@ stop: stop_adore_cli ## Stop the ADORe CLI container
 .PHONY: stop_adore_cli
 stop_adore_cli: docker_host_context_check adore_cli_teardown ## Stop the ADORe CLI container
 
+.PHONY: restart
+restart: stop start ## Restart the ADORe CLI container
+
 .PHONY: run
 run: adore_cli_setup ## Run a command: make run cmd="<command>"
 	@if ! docker image inspect ${ADORE_CLI_IMAGE} >/dev/null 2>&1; then \
