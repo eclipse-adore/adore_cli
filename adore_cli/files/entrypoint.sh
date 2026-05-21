@@ -12,8 +12,6 @@
 # SPDX-License-Identifier: EPL-2.0
 # ********************************************************************************
 
-# Do NOT use set -e here — this is PID 1. Any unhandled error would kill the
-# container. Each section handles its own failures explicitly.
 set -o pipefail
 
 TARGET_USER="${USER:-adore}"
@@ -58,6 +56,9 @@ if [ "${RUN_AS_USER:-0}" != "1" ]; then
 
     mkdir -p /tmp/adore /tmp/adore/.log/rsyslog /var/log/ros2/rsyslog /var/spool/rsyslog
     chown -R "$TARGET_UID:$TARGET_GID" /tmp/adore /var/log/ros2 /var/spool/rsyslog 2>/dev/null || true
+
+    # Point /dev/log at our user-space socket so logger(1) reaches rsyslog
+    ln -sf /tmp/adore/.log/rsyslog/rsyslog.sock /dev/log 2>/dev/null || true
 
     export RUN_AS_USER=1
     exec gosu "${TARGET_UID}:${TARGET_GID}" "$0" "$@"

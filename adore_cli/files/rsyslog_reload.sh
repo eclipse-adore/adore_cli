@@ -2,7 +2,7 @@
 # Renders rsyslog.conf from the current environment and (re)starts rsyslogd.
 # Safe to call multiple times — kills any existing rsyslogd before starting a new one.
 
-RSYSLOG_CONFIG="/var/log/ros2/rsyslog/rsyslog.conf"
+RSYSLOG_CONFIG="/tmp/adore/.log/rsyslog/rsyslog.conf"
 RSYSLOG_PID_FILE="/tmp/adore/.log/rsyslog/rsyslogd.pid"
 
 [ -f /etc/rsyslog.conf.template ] || exit 0
@@ -54,7 +54,7 @@ printf "  ╔══════════════════════�
 printf "  ║              rsyslog                             ║\n"
 printf "  ╠══════════════════════════════════════════════════╣\n"
 printf "  ║  PID      : %-37s║\n" "$RSYSLOG_PID"
-printf "  ║  Config   : %-37s║\n" "$RSYSLOG_CONFIG"
+printf "  ║  Config   : %-37s║\n" ".log/rsyslog/rsyslog.conf"
 printf "  ║  Protocol : %-37s║\n" "$RSYSLOG_PROTOCOL"
 if [ -n "${RSYSLOG_PORT:-}" ]; then
 printf "  ║  Port     : %-37s║\n" "$RSYSLOG_PORT"
