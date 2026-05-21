@@ -95,13 +95,10 @@ fi
 echo "export DISPLAY=${DISPLAY}" > /tmp/.adore_display
 
 # === RSYSLOG SETUP ===
-bash /etc/rsyslog_reload.sh 2>/dev/null || true
+# rsyslog is started by adore_cli.sh running as the target user
 
 shutdown() {
     echo "Shutting down services..."
-    if [ -f "/tmp/adore/.log/rsyslog/rsyslogd.pid" ]; then
-        kill "$(cat /tmp/adore/.log/rsyslog/rsyslogd.pid 2>/dev/null)" 2>/dev/null || true
-    fi
     [ -n "$XVFB_PID" ] && kill "$XVFB_PID" 2>/dev/null || true
     exit 0
 }
