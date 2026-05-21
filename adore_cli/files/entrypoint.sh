@@ -12,6 +12,8 @@
 # SPDX-License-Identifier: EPL-2.0
 # ********************************************************************************
 
+# Do NOT use set -e here — this is PID 1. Any unhandled error would kill the
+# container. Each section handles its own failures explicitly.
 set -o pipefail
 
 TARGET_USER="${USER:-adore}"
@@ -68,9 +70,13 @@ fi
 umask 002
 
 if [ -f /tmp/adore/adore_cli.env ]; then
+    set -a
     source /tmp/adore/adore_cli.env 2>/dev/null || true
+    set +a
 elif [ -f /tmp/adore/.env ]; then
+    set -a
     source /tmp/adore/.env 2>/dev/null || true
+    set +a
 fi
 
 # === DISPLAY SETUP ===
@@ -97,18 +103,19 @@ echo "export DISPLAY=${DISPLAY}" > /tmp/.adore_display
 bash /etc/rsyslog_reload.sh 2>/dev/null || true
 
 # === ROS / PROJECT SETUP ===
+# setup.sh checks $SHELL to pick bash vs zsh scripts; source it as bash explicitly.
+# It also launches services (adore_api, zenoh) via plain `bash` calls — those are
+# fire-and-forget and return immediately, so sourcing here does not block.
 if [ -f /tmp/adore/setup.sh ]; then
-    (
-        set +u
-        source /opt/ros/${ROS_DISTRO}/setup.bash 2>/dev/null || true
-        source /tmp/adore/setup.sh 2>/dev/null || true
-    ) || true
-else
-    (
-        set +u
-        source /opt/ros/${ROS_DISTRO}/setup.bash 2>/dev/null || true
-    ) || true
+    set +u
+    SHELL=/bin/bash source /opt/ros/${ROS_DISTRO}/setup.bash 2>/dev/null || true
+    SHELL=/bin/bash source /tmp/adore/setup.sh 2>/dev/null || true
+    set -u 2>/dev/null || true
 fi
+
+# =========================
+# CLEAN SHUTDOWN
+# =========================
 
 shutdown() {
     echo "Shutting down services..."
