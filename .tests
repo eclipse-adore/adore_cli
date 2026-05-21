@@ -95,7 +95,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
     local description="This test validates rsyslog is properly configured to capture ROS2 messages."
     local status=""
     local message=""
-    local log_file=".log/rsyslog/ros2_syslog.log"
+    local log_file=".log/rsyslog/rsyslogd.log"
     
     printf "\n"
     printf "  Test: %s\n" "${name}"
@@ -111,7 +111,7 @@ LOG_DIRECTORY="${LOG_DIRECTORY:-.log}"
         exit 0
     fi
 
-    rm -rf .log/rsyslog/ros2_syslog.log
+    rm -rf .log/rsyslog/rsyslogd.log
     make start > /dev/null 2>&1;
     sleep 5s
     if ! make run cmd="logger --tag ros2 'Hello World'" > /dev/null 2>&1; then

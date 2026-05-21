@@ -37,8 +37,6 @@ if [ -f "$RSYSLOG_PID_FILE" ]; then
     rm -f "$RSYSLOG_PID_FILE"
 fi
 
-mkdir -p /tmp/adore/.log/rsyslog /var/log/ros2/rsyslog
-
 envsubst '${USER} ${RSYSLOG_PORT} ${RSYSLOG_FORWARD_HOST} ${RSYSLOG_FORWARD_PORT} ${RSYSLOG_FORWARD_PROTOCOL} ${UDP_INPUT_CONFIG} ${TCP_INPUT_CONFIG}' \
     < /etc/rsyslog.conf.template > "$RSYSLOG_CONFIG" 2>/dev/null || true
 chmod 644 "$RSYSLOG_CONFIG" 2>/dev/null || true

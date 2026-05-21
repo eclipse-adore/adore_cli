@@ -21,36 +21,83 @@ TARGET_GID="${GID:-1000}"
 echo "Starting ADORe CLI entrypoint..."
 echo "User: $TARGET_USER (UID=$TARGET_UID, GID=$TARGET_GID)"
 
-# === DYNAMIC USER CREATION ===
-getent group "$TARGET_GID" >/dev/null 2>&1 || groupadd --gid "$TARGET_GID" "$TARGET_USER" 2>/dev/null || true
+# =========================
+# ROOT PHASE
+# =========================
+if [ "${RUN_AS_USER:-0}" != "1" ]; then
 
-if getent passwd "$TARGET_UID" >/dev/null 2>&1; then
-    EXISTING_USER=$(getent passwd "$TARGET_UID" | cut -d: -f1)
-    if [ "$EXISTING_USER" != "$TARGET_USER" ]; then
-        usermod -l "$TARGET_USER" "$EXISTING_USER" 2>/dev/null || true
-        usermod -d "/home/$TARGET_USER" -m "$TARGET_USER" 2>/dev/null || true
+    getent group "$TARGET_GID" >/dev/null 2>&1 || groupadd --gid "$TARGET_GID" "$TARGET_USER" 2>/dev/null || true
+
+    if getent passwd "$TARGET_UID" >/dev/null 2>&1; then
+        EXISTING_USER=$(getent passwd "$TARGET_UID" | cut -d: -f1)
+        if [ "$EXISTING_USER" != "$TARGET_USER" ]; then
+            usermod -l "$TARGET_USER" "$EXISTING_USER" 2>/dev/null || true
+            usermod -d "/home/$TARGET_USER" -m "$TARGET_USER" 2>/dev/null || true
+        fi
+    else
+        useradd --create-home --uid "$TARGET_UID" --gid "$TARGET_GID" --shell /bin/zsh "$TARGET_USER" 2>/dev/null || true
     fi
-else
-    useradd --create-home --uid "$TARGET_UID" --gid "$TARGET_GID" --shell /bin/zsh "$TARGET_USER" 2>/dev/null || true
+
+    if [ -n "${TZ:-}" ]; then
+        ln -snf "/usr/share/zoneinfo/${TZ}" /etc/localtime 2>/dev/null || true
+        echo "${TZ}" > /etc/timezone 2>/dev/null || true
+    fi
+
+    HOME_DIR=$(getent passwd "$TARGET_UID" | cut -d: -f6)
+    HOME_DIR="${HOME_DIR:-/home/$TARGET_USER}"
+    mkdir -p "$HOME_DIR"
+    [ ! -f "$HOME_DIR/.zshrc" ] && cp /etc/skel/.zshrc "$HOME_DIR/" 2>/dev/null || true
+    chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/dev/null || true
+
+    usermod -aG tracing "$TARGET_USER" 2>/dev/null || true
+    usermod -aG syslog  "$TARGET_USER" 2>/dev/null || true
+
+    echo "$TARGET_USER ALL = NOPASSWD : /usr/sbin/rsyslogd, /usr/bin/apt-get, /usr/bin/apt, /usr/bin/python3, /usr/bin/apt-file, /usr/bin/apt-cache, /usr/bin/aptitude" >> /etc/sudoers 2>/dev/null || true
+
+    mkdir -p /tmp/adore /tmp/adore/.log/rsyslog /var/log/ros2/rsyslog /var/spool/rsyslog
+    chown -R "$TARGET_UID:$TARGET_GID" /tmp/adore /var/log/ros2 /var/spool/rsyslog 2>/dev/null || true
+
+    export RUN_AS_USER=1
+    exec gosu "${TARGET_UID}:${TARGET_GID}" "$0" "$@"
 fi
 
-HOME_DIR=$(getent passwd "$TARGET_UID" | cut -d: -f6)
-HOME_DIR="${HOME_DIR:-/home/$TARGET_USER}"
-mkdir -p "$HOME_DIR"
-[ ! -f "$HOME_DIR/.zshrc" ] && cp /etc/skel/.zshrc "$HOME_DIR/" 2>/dev/null || true
-chown -R "$TARGET_UID:$TARGET_GID" "$HOME_DIR" 2>/dev/null || true
+# =========================
+# USER PHASE
+# =========================
 
-usermod -aG tracing "$TARGET_USER" 2>/dev/null || true
-usermod -aG syslog  "$TARGET_USER" 2>/dev/null || true
+umask 002
 
-echo "$TARGET_USER ALL = NOPASSWD : /usr/sbin/rsyslogd, /usr/bin/apt-get, /usr/bin/apt, /usr/bin/python3, /usr/bin/apt-file, /usr/bin/apt-cache, /usr/bin/aptitude" >> /etc/sudoers 2>/dev/null || true
+if [ -f /tmp/adore/adore_cli.env ]; then
+    source /tmp/adore/adore_cli.env 2>/dev/null || true
+elif [ -f /tmp/adore/.env ]; then
+    source /tmp/adore/.env 2>/dev/null || true
+fi
 
-chown -R "$TARGET_UID:$TARGET_GID" /var/log/ros2 2>/dev/null || true
-chown -R "$TARGET_UID:$TARGET_GID" /var/spool/rsyslog 2>/dev/null || true
+# === DISPLAY SETUP ===
+XVFB_PID=""
+
+detect_host_display() {
+    [ -z "${DISPLAY:-}" ] && return 1
+    local display_num="${DISPLAY##*:}"
+    display_num="${display_num%%.*}"
+    [ -S "/tmp/.X11-unix/X${display_num}" ] && return 0
+    return 1
+}
+
+if [ "${VIRTUAL_DISPLAY:-false}" = "true" ] || ! detect_host_display; then
+    Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset >/dev/null 2>&1 &
+    XVFB_PID=$!
+    sleep 2
+    export DISPLAY=":99"
+fi
+
+echo "export DISPLAY=${DISPLAY}" > /tmp/.adore_display
+
+# === RSYSLOG SETUP ===
+bash /etc/rsyslog_reload.sh 2>/dev/null || true
 
 # === ROS / PROJECT SETUP ===
 if [ -f /tmp/adore/setup.sh ]; then
-    echo "Found setup.sh, sourcing..."
     (
         set +u
         source /opt/ros/${ROS_DISTRO}/setup.bash 2>/dev/null || true
@@ -63,40 +110,6 @@ else
     ) || true
 fi
 
-if [ -f /tmp/adore/adore_cli.env ]; then
-    source /tmp/adore/adore_cli.env 2>/dev/null || true
-elif [ -f /tmp/adore/.env ]; then
-    source /tmp/adore/.env 2>/dev/null || true
-fi
-
-# === DISPLAY SETUP ===
-XVFB_PID=""
-detect_display() {
-    [ "${VIRTUAL_DISPLAY:-false}" = "true" ] && return 1
-    if [ -d "/sys/class/drm" ]; then
-        for status_file in /sys/class/drm/card*/status; do
-            [ -f "$status_file" ] && [ "$(cat "$status_file" 2>/dev/null)" = "connected" ] && return 0
-        done
-    fi
-    return 1
-}
-
-if ! detect_display; then
-    echo "Starting virtual display on :99..."
-    Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset >/dev/null 2>&1 &
-    XVFB_PID=$!
-    echo "Virtual display started (PID: $XVFB_PID)"
-    sleep 2
-    export DISPLAY=":99"
-else
-    export DISPLAY="${DISPLAY:-:0}"
-fi
-
-echo "export DISPLAY=${DISPLAY}" > /tmp/.adore_display
-
-# === RSYSLOG SETUP ===
-# rsyslog is started by adore_cli.sh running as the target user
-
 shutdown() {
     echo "Shutting down services..."
     [ -n "$XVFB_PID" ] && kill "$XVFB_PID" 2>/dev/null || true
@@ -105,9 +118,6 @@ shutdown() {
 trap shutdown TERM INT
 
 echo "ADORe CLI ready"
-[ -n "$XVFB_PID" ] && echo "Virtual display PID: $XVFB_PID"
 
-# Keep container alive. Interactive sessions attach via:
-#   docker exec --user <uid>:<gid> -it <container> /bin/zsh
 sleep infinity &
 wait $!
