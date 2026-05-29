@@ -1,21 +1,18 @@
 ARG ADORE_CLI_BASE_IMAGE=adore_cli_base:latest
 FROM ${ADORE_CLI_BASE_IMAGE}
-
 ARG ROS_DISTRO=jazzy
 ARG ARCH
 ARG BRANCH
 ARG SHORT_HASH
-
 LABEL org.adore.image-type="user" \
       org.adore.arch="${ARCH}" \
       org.adore.branch="${BRANCH}" \
       org.adore.commit="${SHORT_HASH}"
-
 COPY context/requirements.ppa    /tmp/build/
 COPY context/requirements.system /tmp/build/
 COPY context/requirements.pip3   /tmp/build/
 COPY context/vendor/             /tmp/build/vendor/
-
+COPY files/install_zenoh.sh      /tmp/build/
 RUN rm -f /etc/apt/apt.conf.d/docker-clean && \
     if [ -s /tmp/build/requirements.ppa ]; then \
         apt-get install -y --no-install-recommends software-properties-common && \
@@ -37,22 +34,18 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean && \
         apt-get install -f -y --no-install-recommends \
 ; \
     fi
-
+RUN bash /tmp/build/install_zenoh.sh
 RUN python3 -m venv /opt/adore_venv --system-site-packages && \
     if [ -s /tmp/build/requirements.pip3 ]; then \
         grep -v '^\s*#' /tmp/build/requirements.pip3 | grep -v '^\s*$' | \
         xargs -r /opt/adore_venv/bin/pip install --upgrade; \
     fi
-
-ENV PATH="/opt/adore_venv/bin:${PATH}"
+ENV PATH="/opt/adore_venv/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 ENV VIRTUAL_ENV="/opt/adore_venv"
-
 RUN userdel --remove ubuntu 2>/dev/null || true
-
 COPY files/rsyslog.conf.template /etc/rsyslog.conf.template
 COPY files/rsyslog_reload.sh     /etc/rsyslog_reload.sh
 COPY files/entrypoint.sh         /entrypoint.sh
 RUN chmod +x /etc/rsyslog_reload.sh /entrypoint.sh
-
 WORKDIR /tmp/adore
 ENTRYPOINT ["/entrypoint.sh"]

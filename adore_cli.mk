@@ -266,7 +266,7 @@ cli: docker_host_context_check _cli_attach ## Start or attach to ADORe CLI
 _cli_attach:
 	@ACTIVE_CONTAINER=$$(cat "${ADORE_CLI_ACTIVE_CONTAINER_FILE}" 2>/dev/null || echo ""); \
 	if [ -n "$$ACTIVE_CONTAINER" ] && docker ps --format "{{.Names}}" 2>/dev/null | grep -q "^$$ACTIVE_CONTAINER$$"; then \
-	    ACTIVE_TAG=$$(echo "$$ACTIVE_CONTAINER" | sed 's/^adore_cli_//; s/_$(shell whoami)$$//'); \
+	    ACTIVE_TAG=$$(echo "$$ACTIVE_CONTAINER" | sed 's/^adore_cli_//; s/_$(shell whoami)_[a-f0-9]\{7\}$$//'); \
 	    echo "✓ Attaching to active session: $$ACTIVE_CONTAINER"; \
 	    make --file=${ADORE_CLI_MAKEFILE_PATH}/adore_cli.mk _execute_environment_action \
 	        ADORE_CLI_USER_TAG="$$ACTIVE_TAG" \

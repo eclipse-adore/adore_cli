@@ -19,6 +19,8 @@ LAST_TAG="$1"
 CALCULATED_TAG="$2"
 MAKEFILE_PATH="$3"
 
+SOURCE_DIRECTORY_HASH=$(printf '%s' "${SOURCE_DIRECTORY:-}" | sha256sum | cut -c1-7)
+
 BOLD='\033[1m'
 RED='\033[31m'
 GREEN='\033[32m'
@@ -94,7 +96,7 @@ case "${USER_CHOICE,,}" in
         exec make --file="$MAKEFILE_PATH/adore_cli.mk" _execute_environment_action \
             ADORE_CLI_USER_TAG="$LAST_TAG" \
             ADORE_CLI_IMAGE="adore_cli:$LAST_TAG" \
-            ADORE_CLI_CONTAINER_NAME="adore_cli_${LAST_TAG}_$(whoami)"
+            ADORE_CLI_CONTAINER_NAME="adore_cli_${LAST_TAG}_$(whoami)_${SOURCE_DIRECTORY_HASH}"
         ;;
     b|build)
         printf "${YELLOW}→ Building new environment${RESET}\n"
@@ -103,7 +105,11 @@ case "${USER_CHOICE,,}" in
         ;;
     s|select)
         # Fetch Tag, CreatedSince, and Size
-        mapfile -t RAW_IMAGES < <(docker images --format "{{.Tag}}|{{.CreatedSince}}|{{.Size}}" adore_cli 2>/dev/null | grep -v '^<none>' | sort -r || true)
+        mapfile -t RAW_IMAGES < <(docker images --format "{{.CreatedAt}}|{{.Tag}}|{{.CreatedSince}}|{{.Size}}" adore_cli 2>/dev/null \
+            | grep -v '^[^|]*|<none>' \
+            | LC_ALL=C sort -r \
+            | sed 's/^[^|]*|//' \
+            || true)
         
         if [[ ${#RAW_IMAGES[@]} -eq 0 ]]; then
             printf "${RED}No local adore_cli images found.${RESET}\n"
@@ -136,7 +142,7 @@ case "${USER_CHOICE,,}" in
         exec make --file="$MAKEFILE_PATH/adore_cli.mk" _execute_environment_action \
             ADORE_CLI_USER_TAG="$SELECTED_TAG" \
             ADORE_CLI_IMAGE="adore_cli:$SELECTED_TAG" \
-            ADORE_CLI_CONTAINER_NAME="adore_cli_${SELECTED_TAG}_$(whoami)"
+            ADORE_CLI_CONTAINER_NAME="adore_cli_${SELECTED_TAG}_$(whoami)_${SOURCE_DIRECTORY_HASH}"
         ;;
     a|abort)
         printf "${RED}→ Aborted by user${RESET}\n"
