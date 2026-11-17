@@ -68,6 +68,7 @@ PACKAGES_HASH     := $(shell find "${VENDOR_PATH}/build" -type f -name "*.deb" 2
 USER_UID := $(shell id -u)
 USER_GID := $(shell id -g)
 UID      ?= $(USER_UID)
+AUDIO_GID ?= $(shell getent group audio | cut -d: -f3)
 GID      ?= $(USER_GID)
 
 DISPLAY ?=
@@ -470,6 +471,9 @@ adore_cli_start:
 	    -e USER=${USER} \
 	    -e UID=${USER_UID} \
 	    -e GID=${USER_GID} \
+	    --device /dev/snd:/dev/snd \
+	    --group-add ${AUDIO_GID} \
+	    --gpus all \
 	    ${DISPLAY_DOCKER_ARG} \
 	    -e ROS_DISTRO=${ROS_DISTRO} \
 	    -e HISTFILE=/tmp/adore_cli/.zsh_history \

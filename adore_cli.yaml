@@ -47,6 +47,19 @@ services:
     container_name: ${ADORE_CLI_CONTAINER_NAME}
     pull_policy: missing
 
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - "${AUDIO_GID:-29}"  # audio group on the host
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
     environment:
       <<: *common-environment
       ROS_DISTRO: ${ROS_DISTRO:-jazzy}
